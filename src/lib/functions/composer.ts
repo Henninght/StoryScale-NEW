@@ -638,14 +638,14 @@ export class FunctionComposer extends EventEmitter {
     return mapping[type as keyof typeof mapping] || 'blogPost';
   }
 
-  private mapToneFromRequest(tone?: string): 'professional' | 'casual' | 'authoritative' | 'friendly' | undefined {
+  private mapToneFromRequest(tone?: string): 'professional' | 'casual' | 'persuasive' | 'informative' | undefined {
     const mapping = {
       'professional': 'professional',
       'casual': 'casual',
-      'persuasive': 'authoritative',
-      'informative': 'professional',
-      'friendly': 'friendly',
-      'authoritative': 'authoritative'
+      'persuasive': 'persuasive',
+      'informative': 'informative',
+      'friendly': 'casual',  // Map friendly to casual
+      'authoritative': 'professional'  // Map authoritative to professional
     } as const;
     return tone ? mapping[tone as keyof typeof mapping] || 'professional' : undefined;
   }
