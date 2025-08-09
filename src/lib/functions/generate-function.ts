@@ -26,7 +26,7 @@ export interface GenerateRequest extends LanguageAwareRequest {
   audience: string;
   company?: string;
   industry?: string;
-  tone?: 'professional' | 'casual' | 'authoritative' | 'friendly';
+  tone?: 'professional' | 'casual' | 'persuasive' | 'informative' | 'authoritative' | 'friendly';
   objectives?: string[];
   keywords?: string[];
   competitors?: string[];

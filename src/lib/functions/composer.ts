@@ -577,7 +577,7 @@ export class FunctionComposer extends EventEmitter {
 
   private shouldExecuteResearch(plan: CompositionPlan): boolean {
     return plan.functions.some(f => f.id === 'research') &&
-           plan.request.enableResearch &&
+           !!plan.request.enableResearch &&
            this.config.enableParallelExecution;
   }
 

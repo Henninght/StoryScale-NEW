@@ -36,7 +36,8 @@
       "Bash(npx playwright test:*)",
       "Bash(touch:*)",
       "Bash(gh run list:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(rsync:*)"
     ],
     "deny": []
   }
