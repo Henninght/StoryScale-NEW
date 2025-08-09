@@ -511,13 +511,18 @@ export class FunctionComposer extends EventEmitter {
     request: LanguageAwareContentRequest,
     researchData?: any
   ): Promise<any> {
-    // Merge research data into request if available
-    const enhancedRequest = researchData ? {
+    // Map LanguageAwareContentRequest to GenerateRequest
+    const generateRequest = {
       ...request,
+      contentType: this.mapContentTypeFromRequest(request.type) as 'blogPost' | 'socialMedia' | 'email' | 'websiteCopy' | 'caseStudy' | 'pressRelease',
+      topic: request.topic,
+      audience: request.targetAudience || 'business professionals',
+      tone: this.mapToneFromRequest(request.tone),
+      keywords: request.keywords,
       researchContext: researchData,
-    } : request;
+    };
 
-    return await generateFunction.generate(enhancedRequest);
+    return await generateFunction.generate(generateRequest);
   }
 
   private async executeOptimization(
@@ -533,7 +538,19 @@ export class FunctionComposer extends EventEmitter {
   ): Promise<any> {
     const context = {
       request,
-      response: { content, requestId: request.id },
+      response: { 
+        content, 
+        requestId: request.id,
+        metadata: {
+          generatedLanguage: request.outputLanguage,
+          wasTranslated: false,
+          processingTime: 0,
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
+          model: 'validation',
+          cost: 0,
+          cacheHit: false
+        }
+      },
     };
     
     return await validateFunction.validate(content, context);
@@ -547,6 +564,8 @@ export class FunctionComposer extends EventEmitter {
       ...request,
       enableResearch: false,
       fallbackMode: true,
+      contentType: (request as any).contentType || 'blogPost',
+      audience: (request as any).audience || 'General',
     };
 
     return await generateFunction.generate(fallbackRequest);
@@ -602,6 +621,33 @@ export class FunctionComposer extends EventEmitter {
     }
 
     return finalContent;
+  }
+
+  /**
+   * Helper methods to map interface properties
+   */
+  private mapContentTypeFromRequest(type: string): string {
+    const mapping = {
+      'social': 'socialMedia',
+      'article': 'blogPost',
+      'blog': 'blogPost',
+      'email': 'email',
+      'landing': 'websiteCopy',
+      'ad': 'websiteCopy'
+    };
+    return mapping[type as keyof typeof mapping] || 'blogPost';
+  }
+
+  private mapToneFromRequest(tone?: string): 'professional' | 'casual' | 'authoritative' | 'friendly' | undefined {
+    const mapping = {
+      'professional': 'professional',
+      'casual': 'casual',
+      'persuasive': 'authoritative',
+      'informative': 'professional',
+      'friendly': 'friendly',
+      'authoritative': 'authoritative'
+    } as const;
+    return tone ? mapping[tone as keyof typeof mapping] || 'professional' : undefined;
   }
 
   private extractQualityScore(results: Map<string, any>): number {
