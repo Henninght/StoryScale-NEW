@@ -3,27 +3,41 @@ import { supabaseClient } from '@/lib/database/supabase'
 
 export async function GET() {
   try {
-    // Check database connection
-    const { error: dbError } = await supabaseClient
-      .from('users')
-      .select('count(*)', { count: 'exact', head: true })
+    // Check database connection if configured
+    let dbStatus = 'not-configured';
+    
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      try {
+        const { error: dbError } = await supabaseClient
+          .from('users')
+          .select('count(*)', { count: 'exact', head: true })
+        dbStatus = dbError ? 'unhealthy' : 'healthy';
+      } catch (e) {
+        // Database might not have tables yet
+        dbStatus = 'initializing';
+      }
+    }
     
     // Check service status
     const services = {
-      database: dbError ? 'unhealthy' : 'healthy',
-      openai: process.env.OPENAI_API_KEY ? 'configured' : 'not-configured',
-      anthropic: process.env.ANTHROPIC_API_KEY ? 'configured' : 'not-configured',
+      database: dbStatus,
+      openai: process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'sk-mock-development-key' ? 'configured' : 'mock-mode',
+      anthropic: process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'sk-mock-development-key' ? 'configured' : 'mock-mode',
       firecrawl: process.env.FIRECRAWL_API_KEY ? 'configured' : 'not-configured',
       tavily: process.env.TAVILY_API_KEY ? 'configured' : 'not-configured',
       stripe: process.env.STRIPE_SECRET_KEY ? 'configured' : 'not-configured',
     }
 
-    const allHealthy = Object.values(services).every(status => 
-      status === 'healthy' || status === 'configured'
-    )
+    // Consider mock mode and initializing as acceptable states
+    const acceptableStates = ['healthy', 'configured', 'mock-mode', 'initializing', 'not-configured'];
+    const criticalServices = ['database'];
+    const hasIssues = Object.entries(services).some(([service, status]) => {
+      if (criticalServices.includes(service) && status === 'unhealthy') return true;
+      return false;
+    });
 
     return NextResponse.json({
-      status: allHealthy ? 'healthy' : 'degraded',
+      status: hasIssues ? 'unhealthy' : (services.database === 'healthy' ? 'healthy' : 'degraded'),
       timestamp: new Date().toISOString(),
       architecture: '3-layer-function-based',
       services,

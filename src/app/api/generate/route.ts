@@ -8,19 +8,21 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { IntelligentGateway, ContentRequest } from '@/lib/gateway/intelligent-gateway'
+import { LanguageAwareContentRequest } from '@/lib/types/language-aware-request'
+import { hybridProcessor } from '@/lib/processors/hybrid-processor'
+import { withSecurity, validateResearchRequest } from '@/lib/middleware/security-middleware'
 
-// Initialize the gateway (singleton pattern for performance)
-let gateway: IntelligentGateway | null = null
+// Initialize the hybrid processor (singleton pattern for performance)
+let processor = hybridProcessor
 
-function getGateway(): IntelligentGateway {
-  if (!gateway) {
-    gateway = new IntelligentGateway()
-  }
-  return gateway
-}
+// Secure POST handler
+const securePostHandler = withSecurity({
+  enableRateLimit: true,
+  enableRequestValidation: true,
+  maxRequestSize: 512 * 1024, // 512KB for content requests
+})
 
-export async function POST(request: NextRequest) {
+export const POST = securePostHandler(async (request: NextRequest) => {
   try {
     // Parse request body
     const body = await request.json()
@@ -33,33 +35,68 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    
-    // Build content request
-    const contentRequest: ContentRequest = {
-      content: body.content,
-      purpose: body.purpose || 'value',
-      format: body.format || 'insight',
-      tone: body.tone || 'professional',
-      targetAudience: body.targetAudience || 'business professionals',
-      enableResearch: body.enableResearch || false,
-      urlReference: body.urlReference,
-      templateId: body.templateId,
-      userId: body.userId || 'anonymous',
-      sessionId: body.sessionId || `session_${Date.now()}`,
-      preferences: body.preferences,
-      patterns: body.patterns || []
+
+    // Additional security validation for research requests
+    if (body.enableResearch) {
+      const researchValidation = await validateResearchRequest(
+        body.content,
+        body.enableResearch,
+        body.userId
+      )
+      
+      if (!researchValidation.allowed) {
+        return NextResponse.json(
+          { error: 'Research request validation failed', reason: researchValidation.reason },
+          { status: 400 }
+        )
+      }
+      
+      // Use sanitized content if provided
+      if (researchValidation.sanitizedContent) {
+        body.content = researchValidation.sanitizedContent
+      }
     }
     
-    // Process through intelligent gateway
-    const gateway = getGateway()
-    const result = await gateway.processRequest(contentRequest)
+    // Build content request
+    const contentRequest: LanguageAwareContentRequest = {
+      id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type: body.type || 'linkedin-post',
+      topic: body.content || 'No topic provided',
+      purpose: body.purpose || 'thought-leadership',
+      format: body.format || 'insight',
+      keywords: body.keywords,
+      tone: body.tone || 'professional',
+      targetAudience: body.targetAudience || 'business professionals',
+      wordCount: body.wordCount || 500,
+      timestamp: new Date(),
+      inputLanguage: body.language || 'en',
+      outputLanguage: body.language || 'en',
+      culturalContext: body.culturalContext,
+      requiresTranslation: false,
+      enableResearch: body.enableResearch || false,
+      glossary: body.glossary,
+      seoRequirements: body.seoRequirements
+    }
     
-    // Return successful response
+    // Process through hybrid processor with new architecture
+    const result = await processor.process(contentRequest, {
+      userId: body.userId,
+      enableComparison: body.enableComparison || false,
+      customFeatureFlags: body.featureFlags
+    })
+    
+    // Return successful response with hybrid processor result
     return NextResponse.json({
-      success: true,
+      success: result.success,
+      content: result.content,
       data: result,
       architecture: '3-layer-function-based',
-      version: '2.0.0'
+      version: '2.0.0',
+      strategy_used: result.strategy_used,
+      processing_time: result.processing_time,
+      quality_score: result.metadata.quality_score,
+      functions_executed: result.metadata.functionsExecuted || [],
+      feature_flags: result.metadata.feature_flags_applied
     })
     
   } catch (error) {
@@ -76,12 +113,21 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
-export async function GET() {
-  // Health check endpoint
+// Secure GET handler (less restrictive for health checks)
+const secureGetHandler = withSecurity({
+  enableRateLimit: true,
+  enableRequestValidation: false, // No body validation for GET
+  maxRequestSize: 0, // No body expected
+})
+
+export const GET = secureGetHandler(async () => {
+  // Health check endpoint with hybrid processor status
+  const healthCheck = await processor.healthCheck()
+  
   return NextResponse.json({
-    status: 'healthy',
+    status: healthCheck.status,
     architecture: '3-layer-function-based',
     version: '2.0.0',
     layers: {
@@ -94,9 +140,17 @@ export async function GET() {
       target_complex: '4-6s',
       cache_hit_rate: '50%',
       cost_reduction: '60%'
+    },
+    feature_flags: processor.getFeatureFlags(),
+    processing_stats: processor.getProcessingStats(),
+    health_details: healthCheck.details,
+    security: {
+      api_protection: 'enabled',
+      rate_limiting: 'active',
+      content_filtering: 'active'
     }
   })
-}
+})
 
 /**
  * Validate request body

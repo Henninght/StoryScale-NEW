@@ -17,3 +17,6 @@ export const supabaseServer = () => {
     }
   )
 }
+
+// Alias for compatibility
+export const createSupabaseServerClient = supabaseServer

@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(cp:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm run dev:*)",
+      "Bash(PORT=3003 npm run dev)",
+      "Bash(curl:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(git push:*)",
+      "Bash(git remote remove:*)",
+      "Bash(git remote add:*)",
+      "Bash(git commit:*)",
+      "Bash(brew install:*)",
+      "Bash(git init:*)",
+      "Bash(true)",
+      "Bash(git add:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(kill:*)",
+      "Bash(rm:*)",
+      "Bash(lsof:*)",
+      "Bash(PORT=3002 npm run dev)",
+      "Bash(npx next:*)",
+      "Bash(npm ls:*)",
+      "mcp__playwright__browser_navigate",
+      "Bash(pkill:*)",
+      "Bash(mv:*)",
+      "mcp__supabase__search_docs",
+      "Bash(npx supabase:*)",
+      "Bash(npm test:*)",
+      "Bash(npm install:*)",
+      "Bash(npx jest:*)",
+      "Bash(grep:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(touch:*)"
+    ],
+    "deny": []
+  }
+}

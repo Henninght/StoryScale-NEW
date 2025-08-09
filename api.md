@@ -45,7 +45,13 @@ Authorization: Bearer <token>
   "tone": "professional",
   "format": "story",
   "enableResearch": true,
-  "urlReference": "https://example.com/article"
+  "urlReference": "https://example.com/article",
+  "outputLanguage": "no",
+  "culturalContext": {
+    "formality": "semi-formal",
+    "businessNorms": ["jantelov-aware", "consensus-focused"],
+    "dialect": "bokmål"
+  }
 }
 ```
 
@@ -84,7 +90,14 @@ Authorization: Bearer <token>
       "characterCount": 1247,
       "purpose": "thought-leadership",
       "format": "story",
-      "aiConfidence": 0.89
+      "aiConfidence": 0.89,
+      "outputLanguage": "no",
+      "contentLanguage": "en",
+      "culturalAdaptation": {
+        "score": 0.92,
+        "adaptations": ["jantelov-compliant", "consensus-focused"],
+        "businessTerms": ["samarbeid", "bærekraft", "innovasjon"]
+      }
     },
     "sources": [
       {
@@ -230,6 +243,184 @@ Authorization: Bearer <token>
       "sources": [...]
     }
   }
+}
+```
+
+## 🌍 Multi-Language API Support
+
+### Language Detection
+```http
+POST /api/language/detect
+Content-Type: application/json
+
+{
+  "text": "Dette er norsk tekst som skal analyseres"
+}
+```
+
+**Response:**
+```json
+{
+  "language": "no",
+  "confidence": 0.95,
+  "supportedLanguages": ["en", "no"],
+  "dialect": "bokmål"
+}
+```
+
+### Norwegian Content Generation
+```http
+POST /api/generate/norwegian
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "content": "Ønsker å skrive om bærekraft i norsk næringsliv",
+  "purpose": "thought-leadership",
+  "targetAudience": "norske bedriftsledere",
+  "tone": "professional",
+  "format": "insight",
+  "culturalContext": {
+    "formality": "semi-formal",
+    "businessNorms": ["jantelov-aware", "consensus-focused"],
+    "industryFocus": "technology",
+    "companySector": "private"
+  },
+  "norwegianSources": {
+    "includeDomains": ["dn.no", "e24.no", "nrk.no"],
+    "excludeAnglicisms": true,
+    "preferNorwegianTerms": true
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "id": "gen_no_456",
+  "content": {
+    "text": "Bærekraft er ikke lenger bare et moteord i norsk næringsliv...",
+    "language": "no",
+    "dialect": "bokmål",
+    "characterCount": 1156
+  },
+  "quality": {
+    "grammarScore": 0.96,
+    "culturalScore": 0.91,
+    "jantelovCompliance": 0.88,
+    "businessAppropriate": 0.93,
+    "overallScore": 0.92
+  },
+  "culturalAdaptations": {
+    "appliedAdaptations": [
+      "Used 'samarbeid' instead of 'collaboration'",
+      "Emphasized consensus-building approach",
+      "Avoided excessive self-promotion",
+      "Referenced Norwegian business values"
+    ],
+    "norwegianTerms": ["bærekraft", "næringsliv", "samarbeid", "innovasjon"],
+    "businessReferences": ["DNB", "Equinor", "Telenor"],
+    "culturalContext": "Norwegian flat hierarchy business culture"
+  },
+  "sources": [
+    {
+      "title": "Norsk næringsliv satser på bærekraft",
+      "url": "https://dn.no/sustainability-article", 
+      "domain": "dn.no",
+      "language": "no",
+      "relevanceScore": 0.87,
+      "culturalRelevance": 0.91
+    }
+  ],
+  "metadata": {
+    "processingTime": 6.2,
+    "modelUsed": "gpt-4-turbo",
+    "languagePromptStrategy": "native-norwegian",
+    "translationUsed": false
+  }
+}
+```
+
+### Cultural Context Validation
+```http
+POST /api/validate/cultural
+Content-Type: application/json
+
+{
+  "content": "Vi er de beste i bransjen og har revolusjonert markedet!",
+  "language": "no",
+  "context": {
+    "businessType": "corporate",
+    "targetAudience": "norwegian-professionals"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "culturalScore": 0.31,
+  "issues": [
+    {
+      "type": "jantelov-violation",
+      "severity": "high",
+      "message": "Excessive self-promotion detected",
+      "suggestion": "Consider more humble phrasing like 'Vi bidrar til utvikling i bransjen'"
+    },
+    {
+      "type": "consensus-oriented",
+      "severity": "medium", 
+      "message": "Could be more collaborative",
+      "suggestion": "Add references to industry collaboration"
+    }
+  ],
+  "suggestions": [
+    "Gjennom samarbeid med våre partnere bidrar vi til utvikling i bransjen",
+    "Vi er stolte av å være en del av bransjeutviklingen"
+  ],
+  "improvementScore": 0.85
+}
+```
+
+### Language Preferences
+```http
+PUT /api/users/language-preferences
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "defaultLanguage": "no",
+  "culturalContext": {
+    "formality": "semi-formal",
+    "businessNorms": ["jantelov-aware", "consensus-focused"],
+    "dialect": "bokmål"
+  },
+  "autoDetect": true,
+  "norwegianTerminology": "business-standard"
+}
+```
+
+### Request Parameters for Multi-Language
+
+All generation endpoints now support these additional parameters:
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `outputLanguage` | `'en' \| 'no'` | Target output language | `'en'` |
+| `contentLanguage` | `'auto' \| 'en' \| 'no'` | Input content language detection | `'auto'` |
+| `culturalContext` | `CulturalContext` | Cultural adaptation settings | `null` |
+| `norwegianSources` | `NorwegianSourceConfig` | Norwegian-specific research settings | `null` |
+| `dialect` | `'bokmål' \| 'nynorsk'` | Norwegian dialect preference | `'bokmål'` |
+
+### Cultural Context Object
+
+```typescript
+interface CulturalContext {
+  formality: 'formal' | 'semi-formal' | 'informal'
+  businessNorms: ('jantelov-aware' | 'consensus-focused' | 'direct-communication')[]
+  industryFocus?: string
+  companySector?: 'private' | 'public' | 'nonprofit'
+  targetRegion?: 'oslo' | 'bergen' | 'trondheim' | 'stavanger' | 'national'
 }
 ```
 

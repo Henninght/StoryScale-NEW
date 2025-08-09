@@ -1,331 +1,593 @@
 /**
- * Multi-Layer Cache System - Core caching infrastructure
- * 
- * 3-Layer Caching Strategy:
- * - L1 Memory: 5 min TTL, 15% hit rate target (request deduplication)
- * - L2 Redis: 24 hour TTL, 25% hit rate target (research results & patterns)
- * - L3 CDN: 7 day TTL, 10% hit rate target (common templates & responses)
- * 
- * Total target cache hit rate: 50%
+ * Multi-Layer Cache Orchestrator
+ * Coordinates L1 (Memory), L2 (Redis), and L3 (CDN) cache layers
+ * with intelligent routing and fallback mechanisms
  */
 
-import { ContentResponse } from '../gateway/intelligent-gateway'
+import { EventEmitter } from 'events';
+import {
+  LanguageAwareContentRequest,
+  LanguageAwareResponse,
+  SupportedLanguage,
+  CacheEntry,
+} from '../types/language-aware-request';
+import { MemoryCache, MemoryCacheConfig } from './memory-cache';
+import { RedisCache, RedisCacheConfig } from './redis-cache';
+import { CDNCache, CDNCacheConfig } from './cdn-cache';
+import { CacheMetrics } from './cache-metrics';
+import { NorwegianTemplates } from './norwegian-templates';
 
-export interface CacheMetrics {
-  hits: number
-  misses: number
-  hitRate: number
-  layer: 'L1' | 'L2' | 'L3'
+export interface MultiLayerCacheConfig {
+  l1: Partial<MemoryCacheConfig>;
+  l2: Partial<RedisCacheConfig>;
+  l3: Partial<CDNCacheConfig>;
+  enableWaterfall: boolean; // Check caches in order
+  enableParallel: boolean; // Check all caches simultaneously
+  enableWriteThrough: boolean; // Write to all layers
+  enableWriteBehind: boolean; // Async write to lower layers
+  warmupOnStart: boolean;
+  metricsEnabled: boolean;
 }
 
-export class MultiLayerCache {
-  private l1Cache: Map<string, CacheEntry> = new Map()
-  private l2Cache: RedisCache | null = null
-  private l3Cache: CDNCache | null = null
-  private metrics: Map<string, CacheMetrics> = new Map()
+export interface CacheLayerResult {
+  layer: 'L1' | 'L2' | 'L3';
+  hit: boolean;
+  latency: number;
+  response?: LanguageAwareResponse;
+}
+
+export interface MultiLayerCacheStats {
+  l1: any;
+  l2: any;
+  l3: any;
+  overall: {
+    totalHits: number;
+    totalMisses: number;
+    totalRequests: number;
+    hitRate: number;
+    averageLatency: number;
+    layerHitRates: {
+      L1: number;
+      L2: number;
+      L3: number;
+    };
+    languageDistribution: Record<SupportedLanguage, number>;
+  };
+}
+
+export class MultiLayerCache extends EventEmitter {
+  private static instance: MultiLayerCache;
   
-  constructor() {
-    this.initializeMetrics()
-    this.initializeL2Cache()
-    this.initializeL3Cache()
-    this.startCleanupTimer()
-  }
+  private l1Cache: MemoryCache;
+  private l2Cache: RedisCache;
+  private l3Cache: CDNCache;
+  private metrics: CacheMetrics;
+  private norwegianTemplates: NorwegianTemplates;
+  private config: MultiLayerCacheConfig;
+  
+  private stats = {
+    totalHits: 0,
+    totalMisses: 0,
+    totalRequests: 0,
+    layerHits: { L1: 0, L2: 0, L3: 0 },
+    layerMisses: { L1: 0, L2: 0, L3: 0 },
+    languageRequests: { en: 0, no: 0 } as Record<SupportedLanguage, number>,
+  };
 
-  /**
-   * Get cached content from any layer (L1 -> L2 -> L3)
-   */
-  async get(key: string): Promise<ContentResponse | null> {
-    // Try L1 (Memory) first - fastest
-    const l1Result = this.getFromL1(key)
-    if (l1Result) {
-      this.recordHit('L1')
-      return l1Result
-    }
-    this.recordMiss('L1')
-
-    // Try L2 (Redis) - medium speed
-    const l2Result = await this.getFromL2(key)
-    if (l2Result) {
-      this.recordHit('L2')
-      // Promote to L1 for faster access
-      this.setInL1(key, l2Result, 5 * 60) // 5 min
-      return l2Result
-    }
-    this.recordMiss('L2')
-
-    // Try L3 (CDN) - slowest but largest
-    const l3Result = await this.getFromL3(key)
-    if (l3Result) {
-      this.recordHit('L3')
-      // Promote to L2 and L1
-      await this.setInL2(key, l3Result, 24 * 60 * 60) // 24 hours
-      this.setInL1(key, l3Result, 5 * 60) // 5 min
-      return l3Result
-    }
-    this.recordMiss('L3')
-
-    return null
-  }
-
-  /**
-   * Set content in specified cache layer
-   */
-  async set(
-    key: string, 
-    value: ContentResponse, 
-    ttl: number, 
-    layer: 'L1' | 'L2' | 'L3' = 'L2'
-  ): Promise<void> {
-    switch (layer) {
-      case 'L1':
-        this.setInL1(key, value, ttl)
-        break
-      case 'L2':
-        await this.setInL2(key, value, ttl)
-        // Also cache in L1 for immediate access
-        this.setInL1(key, value, Math.min(ttl, 5 * 60))
-        break
-      case 'L3':
-        await this.setInL3(key, value, ttl)
-        // Also cache in L2 and L1
-        await this.setInL2(key, value, Math.min(ttl, 24 * 60 * 60))
-        this.setInL1(key, value, 5 * 60)
-        break
-    }
-  }
-
-  /**
-   * L1 Cache Operations (In-Memory)
-   */
-  private getFromL1(key: string): ContentResponse | null {
-    const entry = this.l1Cache.get(key)
-    if (!entry) return null
+  private constructor(config?: Partial<MultiLayerCacheConfig>) {
+    super();
     
-    // Check expiration
-    if (Date.now() > entry.expiresAt) {
-      this.l1Cache.delete(key)
-      return null
-    }
+    this.config = {
+      l1: {
+        maxSize: 1000,
+        ttl: 5 * 60 * 1000, // 5 minutes
+        checkInterval: 60 * 1000,
+        enableCompression: false,
+        warmupEnabled: true,
+      },
+      l2: {
+        ttl: 24 * 60 * 60, // 24 hours
+        keyPrefix: 'storyscale:l2:',
+        enablePipelining: true,
+        enableCompression: true,
+      },
+      l3: {
+        provider: 'local',
+        ttl: 7 * 24 * 60 * 60, // 7 days
+        enableSmartPurge: true,
+        enableStaleWhileRevalidate: true,
+        enableGeoRouting: true,
+      },
+      enableWaterfall: true,
+      enableParallel: false,
+      enableWriteThrough: true,
+      enableWriteBehind: false,
+      warmupOnStart: true,
+      metricsEnabled: true,
+      ...config,
+    };
+
+    // Initialize cache layers
+    this.l1Cache = new MemoryCache(this.config.l1);
+    this.l2Cache = new RedisCache(this.config.l2);
+    this.l3Cache = new CDNCache(this.config.l3);
     
-    return entry.value
-  }
+    // Initialize metrics and templates
+    this.metrics = new CacheMetrics({
+      layers: ['L1', 'L2', 'L3'],
+      targetHitRates: {
+        L1: 0.15,
+        L2: 0.25,
+        L3: 0.10,
+      },
+    });
+    
+    this.norwegianTemplates = new NorwegianTemplates();
 
-  private setInL1(key: string, value: ContentResponse, ttl: number): void {
-    const expiresAt = Date.now() + (ttl * 1000)
-    this.l1Cache.set(key, { value, expiresAt })
-  }
-
-  /**
-   * L2 Cache Operations (Redis)
-   */
-  private async getFromL2(key: string): Promise<ContentResponse | null> {
-    if (!this.l2Cache) return null
-    return await this.l2Cache.get(key)
-  }
-
-  private async setInL2(key: string, value: ContentResponse, ttl: number): Promise<void> {
-    if (!this.l2Cache) return
-    await this.l2Cache.set(key, value, ttl)
-  }
-
-  /**
-   * L3 Cache Operations (CDN/Edge Cache)
-   */
-  private async getFromL3(key: string): Promise<ContentResponse | null> {
-    if (!this.l3Cache) return null
-    return await this.l3Cache.get(key)
-  }
-
-  private async setInL3(key: string, value: ContentResponse, ttl: number): Promise<void> {
-    if (!this.l3Cache) return
-    await this.l3Cache.set(key, value, ttl)
-  }
-
-  /**
-   * Cache warming - preload common requests
-   */
-  async warmCache(commonRequests: Array<{key: string, value: ContentResponse}>): Promise<void> {
-    for (const { key, value } of commonRequests) {
-      // Set in all layers for maximum hit rate
-      await this.set(key, value, 7 * 24 * 60 * 60, 'L3') // 7 days
+    this.setupEventListeners();
+    
+    if (this.config.warmupOnStart) {
+      this.warmupCaches();
     }
   }
 
+  public static getInstance(config?: Partial<MultiLayerCacheConfig>): MultiLayerCache {
+    if (!MultiLayerCache.instance) {
+      MultiLayerCache.instance = new MultiLayerCache(config);
+    }
+    return MultiLayerCache.instance;
+  }
+
   /**
-   * Cache invalidation for pattern updates
+   * Get content from cache layers
    */
-  async invalidatePattern(pattern: string): Promise<void> {
-    // L1 - check all keys
-    for (const [key] of this.l1Cache) {
-      if (key.includes(pattern)) {
-        this.l1Cache.delete(key)
+  public async get(
+    request: LanguageAwareContentRequest
+  ): Promise<LanguageAwareResponse | null> {
+    const startTime = performance.now();
+    this.stats.totalRequests++;
+    this.stats.languageRequests[request.outputLanguage]++;
+
+    let response: LanguageAwareResponse | null = null;
+    const results: CacheLayerResult[] = [];
+
+    if (this.config.enableParallel) {
+      // Check all layers in parallel
+      const [l1Result, l2Result, l3Result] = await Promise.all([
+        this.checkLayer('L1', request),
+        this.checkLayer('L2', request),
+        this.checkLayer('L3', request),
+      ]);
+
+      results.push(l1Result, l2Result, l3Result);
+      
+      // Use the first hit
+      const hit = results.find(r => r.hit);
+      if (hit) {
+        response = hit.response!;
       }
-    }
-    
-    // L2 - Redis pattern deletion
-    if (this.l2Cache) {
-      await this.l2Cache.deletePattern(pattern)
-    }
-    
-    // L3 - CDN invalidation
-    if (this.l3Cache) {
-      await this.l3Cache.invalidatePattern(pattern)
-    }
-  }
+    } else {
+      // Waterfall approach - check layers in order
+      const l1Result = await this.checkLayer('L1', request);
+      results.push(l1Result);
 
-  /**
-   * Get cache performance metrics
-   */
-  getMetrics(): Map<string, CacheMetrics> {
-    return new Map(this.metrics)
-  }
+      if (l1Result.hit) {
+        response = l1Result.response!;
+      } else {
+        const l2Result = await this.checkLayer('L2', request);
+        results.push(l2Result);
 
-  /**
-   * Initialize cache layers
-   */
-  private initializeMetrics(): void {
-    this.metrics.set('L1', { hits: 0, misses: 0, hitRate: 0, layer: 'L1' })
-    this.metrics.set('L2', { hits: 0, misses: 0, hitRate: 0, layer: 'L2' })
-    this.metrics.set('L3', { hits: 0, misses: 0, hitRate: 0, layer: 'L3' })
-  }
+        if (l2Result.hit) {
+          response = l2Result.response!;
+          // Backfill L1
+          if (this.config.enableWriteBehind) {
+            this.backfillLayer('L1', request, response);
+          }
+        } else {
+          const l3Result = await this.checkLayer('L3', request);
+          results.push(l3Result);
 
-  private initializeL2Cache(): void {
-    try {
-      this.l2Cache = new RedisCache()
-    } catch (error) {
-      console.warn('Redis cache not available:', error.message)
-    }
-  }
-
-  private initializeL3Cache(): void {
-    try {
-      this.l3Cache = new CDNCache()
-    } catch (error) {
-      console.warn('CDN cache not available:', error.message)
-    }
-  }
-
-  private recordHit(layer: 'L1' | 'L2' | 'L3'): void {
-    const metrics = this.metrics.get(layer)!
-    metrics.hits++
-    metrics.hitRate = metrics.hits / (metrics.hits + metrics.misses)
-    this.metrics.set(layer, metrics)
-  }
-
-  private recordMiss(layer: 'L1' | 'L2' | 'L3'): void {
-    const metrics = this.metrics.get(layer)!
-    metrics.misses++
-    metrics.hitRate = metrics.hits / (metrics.hits + metrics.misses)
-    this.metrics.set(layer, metrics)
-  }
-
-  /**
-   * Cleanup expired L1 entries
-   */
-  private startCleanupTimer(): void {
-    setInterval(() => {
-      const now = Date.now()
-      for (const [key, entry] of this.l1Cache) {
-        if (now > entry.expiresAt) {
-          this.l1Cache.delete(key)
+          if (l3Result.hit) {
+            response = l3Result.response!;
+            // Backfill L1 and L2
+            if (this.config.enableWriteBehind) {
+              this.backfillLayer('L1', request, response);
+              this.backfillLayer('L2', request, response);
+            }
+          }
         }
       }
-    }, 5 * 60 * 1000) // Clean up every 5 minutes
-  }
-}
-
-interface CacheEntry {
-  value: ContentResponse
-  expiresAt: number
-}
-
-/**
- * Redis Cache Implementation (L2)
- */
-class RedisCache {
-  private client: unknown = null
-
-  constructor() {
-    this.initializeRedis()
-  }
-
-  private async initializeRedis(): Promise<void> {
-    if (typeof window !== 'undefined') return // Client-side, skip Redis
-
-    try {
-      const redis = await import('redis')
-      this.client = redis.createClient({
-        url: process.env.REDIS_URL || 'redis://localhost:6379'
-      })
-      
-      (this.client as any).on('error', (err: unknown) => {
-        console.warn('Redis Client Error:', err)
-      })
-      
-      await (this.client as any).connect()
-    } catch (error) {
-      console.warn('Failed to initialize Redis:', error)
     }
-  }
 
-  async get(key: string): Promise<ContentResponse | null> {
-    if (!this.client) return null
-    
-    try {
-      const result = await (this.client as any).get(`storyscale:${key}`)
-      return result ? JSON.parse(result) : null
-    } catch (error) {
-      console.warn('Redis get error:', error)
-      return null
+    const totalLatency = performance.now() - startTime;
+
+    // Update metrics
+    if (response) {
+      this.stats.totalHits++;
+      this.metrics.recordHit(request.outputLanguage, results, totalLatency);
+    } else {
+      this.stats.totalMisses++;
+      this.metrics.recordMiss(request.outputLanguage, totalLatency);
     }
+
+    this.emit('cache:access', {
+      hit: !!response,
+      layers: results,
+      totalLatency,
+      language: request.outputLanguage,
+    });
+
+    return response;
   }
 
-  async set(key: string, value: ContentResponse, ttl: number): Promise<void> {
-    if (!this.client) return
-    
-    try {
-      await (this.client as any).setEx(
-        `storyscale:${key}`, 
-        ttl, 
-        JSON.stringify(value)
-      )
-    } catch (error) {
-      console.warn('Redis set error:', error)
+  /**
+   * Set content in cache layers
+   */
+  public async set(
+    request: LanguageAwareContentRequest,
+    response: LanguageAwareResponse,
+    options?: {
+      layers?: Array<'L1' | 'L2' | 'L3'>;
+      ttl?: { L1?: number; L2?: number; L3?: number };
     }
+  ): Promise<void> {
+    const layers = options?.layers || ['L1', 'L2', 'L3'];
+
+    if (this.config.enableWriteThrough) {
+      // Write to all specified layers simultaneously
+      const writes = [];
+
+      if (layers.includes('L1')) {
+        writes.push(this.l1Cache.set(request, response, options?.ttl?.L1));
+      }
+
+      if (layers.includes('L2')) {
+        writes.push(this.l2Cache.set(request, response, options?.ttl?.L2));
+      }
+
+      if (layers.includes('L3')) {
+        writes.push(this.l3Cache.set(request, response, options?.ttl?.L3));
+      }
+
+      await Promise.all(writes);
+    } else {
+      // Write to layers sequentially
+      for (const layer of layers) {
+        await this.writeToLayer(layer, request, response, options?.ttl?.[layer]);
+      }
+    }
+
+    this.metrics.recordWrite(request.outputLanguage, layers);
+
+    this.emit('cache:write', {
+      layers,
+      language: request.outputLanguage,
+    });
   }
 
-  async deletePattern(pattern: string): Promise<void> {
-    if (!this.client) return
+  /**
+   * Invalidate cache entries
+   */
+  public async invalidate(options?: {
+    language?: SupportedLanguage;
+    type?: string;
+    tags?: string[];
+    layers?: Array<'L1' | 'L2' | 'L3'>;
+  }): Promise<number> {
+    const layers = options?.layers || ['L1', 'L2', 'L3'];
+    let totalInvalidated = 0;
+
+    const invalidations = [];
+
+    if (layers.includes('L1')) {
+      invalidations.push(
+        this.l1Cache.clear(options).then(count => {
+          totalInvalidated += count;
+          return count;
+        })
+      );
+    }
+
+    if (layers.includes('L2')) {
+      invalidations.push(
+        this.l2Cache.clear(options).then(count => {
+          totalInvalidated += count;
+          return count;
+        })
+      );
+    }
+
+    if (layers.includes('L3')) {
+      invalidations.push(
+        this.l3Cache.purge(options).then(count => {
+          totalInvalidated += count;
+          return count;
+        })
+      );
+    }
+
+    await Promise.all(invalidations);
+
+    this.emit('cache:invalidate', {
+      options,
+      layers,
+      totalInvalidated,
+    });
+
+    return totalInvalidated;
+  }
+
+  /**
+   * Warm up caches with templates
+   */
+  public async warmupCaches(): Promise<void> {
+    const templates = this.norwegianTemplates.getAllTemplates();
     
+    // Separate templates by priority
+    const highPriority = templates.filter(t => t.priority === 'high');
+    const mediumPriority = templates.filter(t => t.priority === 'medium');
+    const lowPriority = templates.filter(t => t.priority === 'low');
+
+    // Warm L1 with high priority templates
+    await this.l1Cache.warmup(
+      highPriority.map(t => ({
+        request: t.request,
+        response: t.response,
+        ttl: 10 * 60 * 1000, // 10 minutes for high priority
+      }))
+    );
+
+    // Warm L2 with high and medium priority templates
+    await this.l2Cache.warmup(
+      [...highPriority, ...mediumPriority].map(t => ({
+        request: t.request,
+        response: t.response,
+        ttl: t.priority === 'high' ? 48 * 60 * 60 : 24 * 60 * 60, // 48h for high, 24h for medium
+      }))
+    );
+
+    // Warm L3 with all templates
+    await this.l3Cache.preloadTemplates(
+      templates.map(t => ({
+        request: t.request,
+        response: t.response,
+        zones: t.request.outputLanguage === 'no' ? ['norway', 'nordic'] : ['global'],
+      }))
+    );
+
+    this.emit('cache:warmup', {
+      templateCount: templates.length,
+      layers: ['L1', 'L2', 'L3'],
+      languages: ['no', 'en'],
+    });
+  }
+
+  /**
+   * Get comprehensive statistics
+   */
+  public async getStats(): Promise<MultiLayerCacheStats> {
+    const [l1Stats, l2Stats, l3Stats] = await Promise.all([
+      Promise.resolve(this.l1Cache.getStats()),
+      this.l2Cache.getStats(),
+      Promise.resolve(this.l3Cache.getStats()),
+    ]);
+
+    const totalRequests = this.stats.totalRequests || 1; // Prevent division by zero
+
+    return {
+      l1: l1Stats,
+      l2: l2Stats,
+      l3: l3Stats,
+      overall: {
+        totalHits: this.stats.totalHits,
+        totalMisses: this.stats.totalMisses,
+        totalRequests: this.stats.totalRequests,
+        hitRate: this.stats.totalHits / totalRequests,
+        averageLatency: this.metrics.getAverageLatency(),
+        layerHitRates: {
+          L1: this.stats.layerHits.L1 / totalRequests,
+          L2: this.stats.layerHits.L2 / totalRequests,
+          L3: this.stats.layerHits.L3 / totalRequests,
+        },
+        languageDistribution: this.stats.languageRequests,
+      },
+    };
+  }
+
+  /**
+   * Private helper methods
+   */
+
+  private async checkLayer(
+    layer: 'L1' | 'L2' | 'L3',
+    request: LanguageAwareContentRequest
+  ): Promise<CacheLayerResult> {
+    const startTime = performance.now();
+    let response: LanguageAwareResponse | null = null;
+
     try {
-      const keys = await (this.client as any).keys(`storyscale:*${pattern}*`)
-      if (keys.length > 0) {
-        await (this.client as any).del(keys)
+      switch (layer) {
+        case 'L1':
+          response = await this.l1Cache.get(request);
+          break;
+        case 'L2':
+          response = await this.l2Cache.get(request);
+          break;
+        case 'L3':
+          response = await this.l3Cache.get(request);
+          break;
       }
     } catch (error) {
-      console.warn('Redis delete pattern error:', error)
+      this.emit('cache:error', { layer, error });
+    }
+
+    const latency = performance.now() - startTime;
+    const hit = !!response;
+
+    if (hit) {
+      this.stats.layerHits[layer]++;
+    } else {
+      this.stats.layerMisses[layer]++;
+    }
+
+    return {
+      layer,
+      hit,
+      latency,
+      response: response || undefined,
+    };
+  }
+
+  private async writeToLayer(
+    layer: 'L1' | 'L2' | 'L3',
+    request: LanguageAwareContentRequest,
+    response: LanguageAwareResponse,
+    ttl?: number
+  ): Promise<void> {
+    try {
+      switch (layer) {
+        case 'L1':
+          await this.l1Cache.set(request, response, ttl);
+          break;
+        case 'L2':
+          await this.l2Cache.set(request, response, ttl);
+          break;
+        case 'L3':
+          await this.l3Cache.set(request, response, ttl);
+          break;
+      }
+    } catch (error) {
+      this.emit('cache:error', { layer, action: 'write', error });
     }
   }
-}
 
-/**
- * CDN Cache Implementation (L3)
- * This is a placeholder for edge cache integration
- */
-class CDNCache {
-  async get(_key: string): Promise<ContentResponse | null> {
-    // In production, this would integrate with Vercel Edge Cache or CloudFlare
-    // For now, return null (no L3 cache)
-    return null
+  private async backfillLayer(
+    layer: 'L1' | 'L2',
+    request: LanguageAwareContentRequest,
+    response: LanguageAwareResponse
+  ): Promise<void> {
+    // Async backfill to higher layers
+    setImmediate(async () => {
+      try {
+        await this.writeToLayer(layer, request, response);
+        this.emit('cache:backfill', { layer, language: request.outputLanguage });
+      } catch (error) {
+        this.emit('cache:error', { layer, action: 'backfill', error });
+      }
+    });
   }
 
-  async set(_key: string, _value: ContentResponse, _ttl: number): Promise<void> {
-    // In production, this would set edge cache headers
-    // For now, this is a no-op
+  private setupEventListeners(): void {
+    // Forward events from individual caches
+    this.l1Cache.on('cache:hit', data => this.emit('l1:hit', data));
+    this.l1Cache.on('cache:miss', data => this.emit('l1:miss', data));
+    
+    this.l2Cache.on('cache:hit', data => this.emit('l2:hit', data));
+    this.l2Cache.on('cache:miss', data => this.emit('l2:miss', data));
+    
+    this.l3Cache.on('cache:hit', data => this.emit('l3:hit', data));
+    this.l3Cache.on('cache:miss', data => this.emit('l3:miss', data));
+
+    // Monitor errors
+    this.l1Cache.on('cache:error', error => this.handleCacheError('L1', error));
+    this.l2Cache.on('cache:error', error => this.handleCacheError('L2', error));
+    this.l3Cache.on('cache:error', error => this.handleCacheError('L3', error));
   }
 
-  async invalidatePattern(_pattern: string): Promise<void> {
-    // In production, this would invalidate CDN cache
-    // For now, this is a no-op
+  private handleCacheError(layer: string, error: any): void {
+    this.emit('cache:layer:error', { layer, error });
+    
+    // Log to metrics
+    if (this.config.metricsEnabled) {
+      this.metrics.recordError(layer, error);
+    }
+  }
+
+  /**
+   * Health check for all layers
+   */
+  public async healthCheck(): Promise<{
+    healthy: boolean;
+    layers: {
+      L1: { healthy: boolean; details: any };
+      L2: { healthy: boolean; details: any };
+      L3: { healthy: boolean; details: any };
+    };
+  }> {
+    const [l2Health, l3Health] = await Promise.all([
+      this.l2Cache.healthCheck(),
+      this.l3Cache.healthCheck(),
+    ]);
+
+    const l1Health = {
+      healthy: true,
+      details: this.l1Cache.getStats(),
+    };
+
+    const allHealthy = l1Health.healthy && l2Health.healthy && l3Health.healthy;
+
+    return {
+      healthy: allHealthy,
+      layers: {
+        L1: l1Health,
+        L2: l2Health,
+        L3: l3Health,
+      },
+    };
+  }
+
+  /**
+   * Optimize cache distribution based on metrics
+   */
+  public async optimizeCacheDistribution(): Promise<void> {
+    const metrics = this.metrics.getMetrics();
+    
+    // Analyze hit rates and adjust TTLs
+    for (const layer of ['L1', 'L2', 'L3'] as const) {
+      const hitRate = metrics.layers[layer].hitRate;
+      const targetHitRate = metrics.layers[layer].targetHitRate;
+      
+      if (hitRate < targetHitRate * 0.8) {
+        // Increase TTL if hit rate is too low
+        this.emit('cache:optimize', {
+          layer,
+          action: 'increase-ttl',
+          reason: 'low-hit-rate',
+          currentHitRate: hitRate,
+          targetHitRate,
+        });
+      }
+    }
+
+    // Rebalance based on language distribution
+    const norwegianRatio = metrics.languages.no.requests / 
+      (metrics.languages.no.requests + metrics.languages.en.requests);
+    
+    if (norwegianRatio > 0.5) {
+      // Increase Norwegian template priority
+      await this.warmupNorwegianTemplates();
+    }
+  }
+
+  private async warmupNorwegianTemplates(): Promise<void> {
+    const norwegianTemplates = this.norwegianTemplates.getTemplatesByLanguage('no');
+    
+    await this.l1Cache.warmup(
+      norwegianTemplates.slice(0, 20).map(t => ({
+        request: t.request,
+        response: t.response,
+        ttl: 15 * 60 * 1000, // 15 minutes
+      }))
+    );
+  }
+
+  /**
+   * Cleanup
+   */
+  public async destroy(): Promise<void> {
+    this.l1Cache.destroy();
+    await this.l2Cache.destroy();
+    this.l3Cache.destroy();
+    this.removeAllListeners();
   }
 }

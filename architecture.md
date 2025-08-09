@@ -2,7 +2,7 @@
 
 ## 🏗️ System Overview (Updated August 2025)
 
-StoryScale is a modern AI-powered content studio built with a **3-layer function-based architecture** using Next.js 14, TypeScript, and Supabase. The system follows a Research → Plan → Implement workflow with intelligent document identification and multi-provider AI integration.
+StoryScale is a modern AI-powered content studio built with a **3-layer function-based architecture** using Next.js 14, TypeScript, and Supabase. The system follows a Research → Plan → Implement workflow with intelligent document identification, multi-provider AI integration, and **multi-language support (English & Norwegian)**.
 
 **⚠️ Architecture Updated**: Based on expert analysis, the original microservices agent approach has been replaced with a simplified 3-layer system for better performance (4-6s vs 15-30s) and maintainability (50% fewer integration points).
 
@@ -43,6 +43,7 @@ graph TB
 
 ### 2. **AI-First Design**
 - **Multi-Provider Support**: OpenAI + Anthropic with fallbacks
+- **Multi-Language Generation**: English & Norwegian content with cultural adaptation
 - **Agent Pipeline**: Specialized agents for different tasks
 - **Research Integration**: Optional enhancement with external APIs
 
@@ -144,6 +145,225 @@ graph LR
     INTEL --> PATTERNS[(Pattern DB)]
     INTEL --> QUALITY[Quality Model]
     INTEL --> METRICS[Cost Metrics]
+```
+
+## 🌍 Multi-Language Architecture (Norwegian Support)
+
+### Language-Aware System Design
+
+```mermaid
+graph TB
+    subgraph "Layer 1: Language-Aware Gateway"
+        LANG_DETECT[Language Detection] --> CLASSIFIER[Request Classifier]
+        CLASSIFIER --> CACHE_EN[(Cache EN)]
+        CLASSIFIER --> CACHE_NO[(Cache NO)]
+        CACHE_EN --> ROUTER[Smart Router]
+        CACHE_NO --> ROUTER
+    end
+    
+    subgraph "Layer 2: Multi-Language Processing"
+        ROUTER --> RESEARCH_EN[Research EN Sources]
+        ROUTER --> RESEARCH_NO[Research NO Sources]
+        RESEARCH_EN --> GENERATOR[Content Generator]
+        RESEARCH_NO --> GENERATOR
+        
+        GENERATOR --> GEN_EN[English Generator]
+        GENERATOR --> GEN_NO[Norwegian Generator]
+        GEN_EN --> VALIDATOR[Quality Validator]
+        GEN_NO --> VALIDATOR_NO[Norwegian Validator]
+    end
+    
+    subgraph "Layer 3: Cultural Intelligence"
+        VALIDATOR --> PATTERNS_EN[(Patterns EN)]
+        VALIDATOR_NO --> PATTERNS_NO[(Patterns NO)]
+        PATTERNS_EN --> CULTURAL[Cultural Adapter]
+        PATTERNS_NO --> CULTURAL
+    end
+```
+
+### Multi-Language Data Flow
+
+```typescript
+interface LanguageAwareRequest {
+  // Core content request
+  content: string
+  purpose: 'thought-leadership' | 'question' | 'value' | 'authority'
+  format: 'story' | 'insight' | 'list' | 'howto' | 'question'
+  
+  // Language specification
+  outputLanguage: 'en' | 'no'
+  contentLanguage?: 'auto' | 'en' | 'no'  // Input detection
+  
+  // Cultural adaptation
+  culturalContext?: {
+    formality: 'formal' | 'semi-formal' | 'informal'
+    businessNorms: string[]  // ['jantelov-aware', 'consensus-focused']
+    dialect?: 'bokmål' | 'nynorsk'  // Norwegian variants
+  }
+}
+
+interface LanguageAwareResponse {
+  content: {
+    text: string
+    language: 'en' | 'no'
+    confidence: number
+    culturalAdaptations: string[]
+  }
+  sources?: LanguageAwareSource[]
+  quality: {
+    grammarScore: number
+    culturalScore: number  // Norwegian business appropriateness
+    overallScore: number
+  }
+  metadata: {
+    processingTime: number
+    languageDetected?: 'en' | 'no'
+    translationUsed: boolean
+  }
+}
+```
+
+### Norwegian Language Pipeline
+
+```typescript
+// Norwegian Content Generation Pipeline
+class NorwegianContentPipeline {
+  async process(request: LanguageAwareRequest): Promise<LanguageAwareResponse> {
+    // 1. Norwegian Research Sources
+    const norwegianSources = await this.researchFunction.gather({
+      ...request,
+      sources: ['dn.no', 'vg.no', 'nrk.no', 'e24.no', 'linkedin.com/in/*/no']
+    })
+    
+    // 2. Norwegian Content Generation
+    const content = await this.generateFunction.create({
+      ...request,
+      prompt: this.norwegianPrompts.buildPrompt(request),
+      culturalGuidelines: this.norwegianCulture.getGuidelines(request.culturalContext)
+    })
+    
+    // 3. Norwegian Quality Validation
+    const validation = await this.norwegianValidator.validate(content, {
+      grammarCheck: true,
+      culturalCheck: true,
+      businessAppropriate: true,
+      jantelovCompliant: true
+    })
+    
+    // 4. Norwegian Pattern Learning
+    if (validation.score > 0.7) {
+      await this.norwegianPatterns.learn(request, content, validation)
+    }
+    
+    return {
+      content: {
+        text: content,
+        language: 'no',
+        confidence: validation.score,
+        culturalAdaptations: validation.culturalAdaptations
+      },
+      sources: norwegianSources,
+      quality: validation,
+      metadata: {
+        processingTime: Date.now() - startTime,
+        languageDetected: request.contentLanguage,
+        translationUsed: false
+      }
+    }
+  }
+}
+```
+
+### Language-Specific Components
+
+#### 1. Norwegian Research Sources
+```typescript
+const norwegianResearchSources = {
+  business: ['dn.no', 'e24.no', 'kapital.no'],
+  news: ['nrk.no', 'vg.no', 'aftenposten.no'],
+  professional: ['linkedin.com/pulse/no/', 'digi.no', 'tu.no'],
+  government: ['regjeringen.no', 'ssb.no', 'nav.no']
+}
+```
+
+#### 2. Norwegian AI Model Configuration
+```typescript
+const norwegianModelConfig = {
+  openai: {
+    model: 'gpt-4-turbo',
+    systemPrompt: `Du er en norsk profesjonell innholdsskaper. Skriv naturlig, engasjerende norsk innhold som passer for LinkedIn og profesjonell kommunikasjon. Følg norske forretningsmoral og kommunikasjonsstil.`,
+    temperature: 0.7,
+    culturalInstructions: [
+      'Vær bevisst på janteloven - unngå overdreven selvskryt',
+      'Fokuser på samarbeid og konsensus',
+      'Bruk inkluderende språk',
+      'Respekter work-life balance verdier'
+    ]
+  },
+  anthropic: {
+    model: 'claude-3-sonnet',
+    systemPrompt: `Du skriver profesjonelt norsk innhold for LinkedIn...`,
+    fallbackForOpenAI: true
+  }
+}
+```
+
+#### 3. Norwegian Quality Metrics
+```typescript
+interface NorwegianQualityMetrics {
+  grammarScore: number        // 0-1: Norwegian grammar correctness
+  culturalScore: number       // 0-1: Business culture appropriateness
+  jantelovScore: number       // 0-1: Jantelov compliance (modesty)
+  consensusScore: number      // 0-1: Collaboration-oriented language
+  formalityScore: number      // 0-1: Appropriate formality level
+  readabilityScore: number    // 0-1: Norwegian readability
+  overallScore: number        // Weighted average
+}
+```
+
+### Cache Strategy for Multi-Language
+
+```typescript
+interface LanguageAwareCache {
+  // Cache keys include language parameter
+  generateKey(request: LanguageAwareRequest): string {
+    return `${request.content.hash}:${request.outputLanguage}:${request.culturalContext?.formality}`
+  }
+  
+  // Cross-language cache sharing for common patterns
+  sharedPatterns: {
+    'business-update': ['en', 'no'],  // Can share structure
+    'thought-leadership': ['en', 'no'],
+    'question-post': ['en', 'no']
+  }
+  
+  // Language-specific cache warming
+  warmCacheForLanguage(language: 'en' | 'no'): Promise<void>
+}
+```
+
+### Performance Targets with Norwegian Support
+
+```yaml
+performance_targets:
+  english_content:
+    simple_requests: "<1s (cached)"
+    complex_requests: "4-6s"
+    cache_hit_rate: "50%"
+  
+  norwegian_content:
+    simple_requests: "<1.2s (cached + language processing)"
+    complex_requests: "5-7s (includes cultural validation)"
+    cache_hit_rate: "40%" # Lower due to language fragmentation
+    translation_accuracy: ">95%"
+    cultural_appropriateness: ">90%"
+
+quality_targets:
+  norwegian_content:
+    grammar_accuracy: ">95%"
+    cultural_appropriateness: ">90%"
+    business_tone_match: ">85%"
+    user_satisfaction: ">80%"
 ```
 
 ### Provider Architecture

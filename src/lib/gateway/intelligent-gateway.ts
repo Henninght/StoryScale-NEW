@@ -1,411 +1,867 @@
 /**
- * Intelligent Gateway - Layer 1 of the 3-Layer Architecture
- * 
- * Responsibilities:
- * - Request classification and smart routing
- * - Multi-layer caching (L1/L2/L3)
- * - Cost optimization and tracking
- * - Authentication handling
- * - Performance monitoring
- * 
- * Target: <1s response for 50% of requests through intelligent caching
+ * Intelligent Gateway for StoryScale
+ * Main gateway logic with request classification, routing, and cost tracking
  */
 
-import { MultiLayerCache } from '../cache/multi-layer-cache'
-import { CostGuardian } from '../monitoring/cost-guardian'
+import { EventEmitter } from 'events';
+import {
+  LanguageAwareContentRequest,
+  LanguageAwareResponse,
+  RequestClassification,
+  RouteDecision,
+  GatewayConfig,
+  SupportedLanguage,
+  CulturalContext,
+  LanguageSpecificMetrics,
+  GatewayError,
+  GatewayErrorCode,
+  CacheEntry,
+} from '../types/language-aware-request';
+import { LanguageDetectionService } from '../services/language-detection';
+import { CacheKeyGenerator } from '../utils/cache-keys';
 
-export interface ContentRequest {
-  // User requirements
-  content: string
-  purpose: 'thought-leadership' | 'question' | 'value' | 'authority'
-  format: 'story' | 'insight' | 'list' | 'howto' | 'question'
-  tone: 'professional' | 'casual' | 'friendly' | 'authoritative'
-  targetAudience: string
-  
-  // Optional enhancements
-  enableResearch?: boolean
-  urlReference?: string
-  templateId?: string
-  
-  // Processing context
-  userId: string
-  sessionId: string
-  preferences?: UserPreferences
-  patterns?: UserPattern[]
+// Gateway events
+export interface GatewayEvents {
+  'request:received': (request: LanguageAwareContentRequest) => void;
+  'request:classified': (classification: RequestClassification) => void;
+  'request:routed': (decision: RouteDecision) => void;
+  'request:completed': (response: LanguageAwareResponse) => void;
+  'request:failed': (error: GatewayError) => void;
+  'cache:hit': (key: string) => void;
+  'cache:miss': (key: string) => void;
+  'fallback:triggered': (reason: string) => void;
+  'cost:threshold': (cost: number, threshold: number) => void;
 }
 
-export interface ContentResponse {
-  content: {
-    short: string
-    medium: string
-    long: string
-    selected: string
+// Model capabilities
+interface ModelCapabilities {
+  id: string;
+  languages: SupportedLanguage[];
+  maxTokens: number;
+  costPerToken: number;
+  features: string[];
+  priority: number;
+  endpoint: string;
+}
+
+// Processing pipeline stage
+interface PipelineStage {
+  name: string;
+  execute: (context: ProcessingContext) => Promise<ProcessingContext>;
+  onError?: (error: Error, context: ProcessingContext) => Promise<ProcessingContext>;
+}
+
+// Processing context
+interface ProcessingContext {
+  request: LanguageAwareContentRequest;
+  classification?: RequestClassification;
+  route?: RouteDecision;
+  response?: LanguageAwareResponse;
+  startTime: number;
+  costs: {
+    tokens: number;
+    amount: number;
+  };
+  metadata: Map<string, any>;
+  errors: Error[];
+}
+
+export class IntelligentGateway extends EventEmitter {
+  private static instance: IntelligentGateway;
+  private config: GatewayConfig;
+  private languageDetector: LanguageDetectionService;
+  private cacheKeyGenerator: CacheKeyGenerator;
+  private cache: Map<string, CacheEntry>;
+  private metrics: Map<SupportedLanguage, LanguageSpecificMetrics>;
+  private models: Map<string, ModelCapabilities>;
+  private pipeline: PipelineStage[];
+  private requestQueue: Map<string, ProcessingContext>;
+  private totalCost: number = 0;
+
+  private constructor(config?: Partial<GatewayConfig>) {
+    super();
+    this.config = this.initializeConfig(config);
+    this.languageDetector = LanguageDetectionService.getInstance();
+    this.cacheKeyGenerator = CacheKeyGenerator.getInstance();
+    this.cache = new Map();
+    this.metrics = this.initializeMetrics();
+    this.models = this.initializeModels();
+    this.pipeline = this.initializePipeline();
+    this.requestQueue = new Map();
   }
-  sources?: ResearchSource[]
-  citations?: Citation[]
-  emoji?: string
-  qualityScore: number
-  metadata: {
-    processingTime: number
-    tokensUsed: number
-    cacheHit: boolean
-    provider: string
-    confidence: number
-  }
-}
 
-export interface RouteDecision {
-  cached: boolean
-  cachedResponse?: ContentResponse
-  needsResearch: boolean
-  complexity: 'simple' | 'medium' | 'complex'
-  estimatedTokens: number
-  recommendedProvider: 'openai' | 'anthropic'
-  cacheStrategy: 'L1' | 'L2' | 'L3' | 'none'
-}
-
-export interface UserPreferences {
-  preferredModel?: string
-  defaultTone?: string
-  defaultFormat?: string
-}
-
-export interface UserPattern {
-  id: string
-  type: string
-  pattern: any
-}
-
-export interface ResearchSource {
-  id: string
-  title: string
-  url: string
-  author?: string
-  date?: string
-  type: string
-  provider: string
-  relevanceScore: number
-  usedSnippets: string[]
-}
-
-export interface Citation {
-  text: string
-  position: number
-  sourceId: string
-}
-
-export class IntelligentGateway {
-  private cache: MultiLayerCache
-  private costGuardian: CostGuardian
-  private requestClassifier: RequestClassifier
-  private router: SmartRouter
-  
-  constructor() {
-    this.cache = new MultiLayerCache()
-    this.costGuardian = new CostGuardian()
-    this.requestClassifier = new RequestClassifier()
-    this.router = new SmartRouter()
+  public static getInstance(config?: Partial<GatewayConfig>): IntelligentGateway {
+    if (!IntelligentGateway.instance) {
+      IntelligentGateway.instance = new IntelligentGateway(config);
+    }
+    return IntelligentGateway.instance;
   }
 
   /**
-   * Main entry point for all content generation requests
+   * Initialize gateway configuration
    */
-  async processRequest(request: ContentRequest): Promise<ContentResponse> {
-    const startTime = Date.now()
+  private initializeConfig(config?: Partial<GatewayConfig>): GatewayConfig {
+    const defaultConfig: GatewayConfig = {
+      defaultLanguage: 'en',
+      enableAutoDetection: true,
+      enableFallback: true,
+      cacheEnabled: true,
+      cacheTTL: 3600, // 1 hour
+      maxRetries: 3,
+      timeout: 30000, // 30 seconds
+      costThresholds: {
+        warning: 1.0,
+        critical: 5.0,
+      },
+      languageModels: {
+        en: ['gpt-4', 'gpt-3.5-turbo', 'claude-3'],
+        no: ['gpt-4', 'claude-3'], // Norwegian-capable models
+      },
+      culturalDefaults: {
+        no: {
+          market: 'norway',
+          businessType: 'b2b',
+          dialectPreference: 'bokmål',
+          formalityLevel: 'neutral',
+          localReferences: true,
+        },
+      },
+    };
+
+    return { ...defaultConfig, ...config };
+  }
+
+  /**
+   * Initialize language-specific metrics
+   */
+  private initializeMetrics(): Map<SupportedLanguage, LanguageSpecificMetrics> {
+    const metrics = new Map<SupportedLanguage, LanguageSpecificMetrics>();
     
+    const languages: SupportedLanguage[] = ['en', 'no'];
+    languages.forEach(lang => {
+      metrics.set(lang, {
+        language: lang,
+        requestCount: 0,
+        totalTokens: 0,
+        totalCost: 0,
+        averageProcessingTime: 0,
+        cacheHitRate: 0,
+        translationCount: 0,
+        fallbackCount: 0,
+        errorRate: 0,
+      });
+    });
+
+    return metrics;
+  }
+
+  /**
+   * Initialize available models
+   */
+  private initializeModels(): Map<string, ModelCapabilities> {
+    const models = new Map<string, ModelCapabilities>();
+
+    // GPT-4 (multi-language support)
+    models.set('gpt-4', {
+      id: 'gpt-4',
+      languages: ['en', 'no'],
+      maxTokens: 8192,
+      costPerToken: 0.00003,
+      features: ['complex-reasoning', 'translation', 'cultural-adaptation'],
+      priority: 1,
+      endpoint: 'openai',
+    });
+
+    // GPT-3.5 (basic multi-language)
+    models.set('gpt-3.5-turbo', {
+      id: 'gpt-3.5-turbo',
+      languages: ['en', 'no'],
+      maxTokens: 4096,
+      costPerToken: 0.000002,
+      features: ['basic-generation', 'simple-translation'],
+      priority: 2,
+      endpoint: 'openai',
+    });
+
+    // Claude 3 (advanced multi-language)
+    models.set('claude-3', {
+      id: 'claude-3',
+      languages: ['en', 'no'],
+      maxTokens: 100000,
+      costPerToken: 0.000015,
+      features: ['complex-reasoning', 'translation', 'cultural-adaptation', 'long-context'],
+      priority: 1,
+      endpoint: 'anthropic',
+    });
+
+    return models;
+  }
+
+  /**
+   * Initialize processing pipeline
+   */
+  private initializePipeline(): PipelineStage[] {
+    return [
+      {
+        name: 'validation',
+        execute: this.validateRequest.bind(this),
+      },
+      {
+        name: 'language-detection',
+        execute: this.detectLanguage.bind(this),
+      },
+      {
+        name: 'cache-check',
+        execute: this.checkCache.bind(this),
+      },
+      {
+        name: 'classification',
+        execute: this.classifyRequest.bind(this),
+      },
+      {
+        name: 'routing',
+        execute: this.routeRequest.bind(this),
+      },
+      {
+        name: 'processing',
+        execute: this.processRequest.bind(this),
+        onError: this.handleProcessingError.bind(this),
+      },
+      {
+        name: 'post-processing',
+        execute: this.postProcessResponse.bind(this),
+      },
+      {
+        name: 'caching',
+        execute: this.cacheResponse.bind(this),
+      },
+      {
+        name: 'metrics',
+        execute: this.updateMetrics.bind(this),
+      },
+    ];
+  }
+
+  /**
+   * Process a content request through the gateway
+   */
+  public async processContent(
+    request: LanguageAwareContentRequest
+  ): Promise<LanguageAwareResponse> {
+    const context: ProcessingContext = {
+      request,
+      startTime: Date.now(),
+      costs: { tokens: 0, amount: 0 },
+      metadata: new Map(),
+      errors: [],
+    };
+
+    // Store in queue
+    this.requestQueue.set(request.id, context);
+    this.emit('request:received', request);
+
     try {
-      // Step 1: Classify and route the request
-      const route = await this.classifyAndRoute(request)
-      
-      // Step 2: Check cache first (performance optimization)
-      if (route.cached && route.cachedResponse) {
-        await this.costGuardian.recordCacheHit(request.userId)
-        return {
-          ...route.cachedResponse,
-          metadata: {
-            ...route.cachedResponse.metadata,
-            processingTime: Date.now() - startTime,
-            cacheHit: true
+      // Execute pipeline
+      let currentContext = context;
+      for (const stage of this.pipeline) {
+        try {
+          currentContext = await stage.execute(currentContext);
+          
+          // Check if response is ready (cache hit)
+          if (currentContext.response && stage.name === 'cache-check') {
+            break;
+          }
+        } catch (error) {
+          if (stage.onError) {
+            currentContext = await stage.onError(error as Error, currentContext);
+          } else {
+            throw error;
           }
         }
       }
-      
-      // Step 3: Route to processing functions
-      const response = await this.router.routeToProcessing(request, route)
-      
-      // Step 4: Cache the response for future requests
-      await this.cacheResponse(request, response, route.cacheStrategy)
-      
-      // Step 5: Record metrics
-      await this.costGuardian.recordProcessing({
-        userId: request.userId,
-        tokensUsed: response.metadata.tokensUsed,
-        processingTime: Date.now() - startTime,
-        provider: response.metadata.provider
-      })
-      
-      return {
-        ...response,
-        metadata: {
-          ...response.metadata,
-          processingTime: Date.now() - startTime,
-          cacheHit: false
-        }
+
+      if (!currentContext.response) {
+        throw new GatewayError(
+          GatewayErrorCode.ROUTING_FAILED,
+          'No response generated',
+          { requestId: request.id }
+        );
       }
-      
+
+      this.emit('request:completed', currentContext.response);
+      return currentContext.response;
+
     } catch (error) {
-      console.error('Gateway processing error:', error)
-      throw new Error(`Gateway processing failed: ${error.message}`)
+      const gatewayError = error instanceof GatewayError
+        ? error
+        : new GatewayError(
+            GatewayErrorCode.ROUTING_FAILED,
+            'Gateway processing failed',
+            { originalError: error }
+          );
+
+      this.emit('request:failed', gatewayError);
+      throw gatewayError;
+
+    } finally {
+      this.requestQueue.delete(request.id);
     }
   }
 
   /**
-   * Classify request and determine optimal routing strategy
+   * Pipeline stages implementation
    */
-  async classifyAndRoute(request: ContentRequest): Promise<RouteDecision> {
-    // Generate cache key for this request
-    const cacheKey = this.generateCacheKey(request)
-    
-    // Check multi-layer cache
-    const cachedResponse = await this.cache.get(cacheKey)
-    if (cachedResponse) {
-      return {
-        cached: true,
-        cachedResponse,
-        needsResearch: false,
-        complexity: 'simple',
-        estimatedTokens: 0,
-        recommendedProvider: 'openai',
-        cacheStrategy: 'L1'
+
+  private async validateRequest(context: ProcessingContext): Promise<ProcessingContext> {
+    const { request } = context;
+
+    // Validate required fields
+    if (!request.id || !request.type || !request.topic || !request.outputLanguage) {
+      throw new GatewayError(
+        GatewayErrorCode.ROUTING_FAILED,
+        'Missing required fields in request',
+        { request }
+      );
+    }
+
+    // Validate language
+    if (!['en', 'no'].includes(request.outputLanguage)) {
+      throw new GatewayError(
+        GatewayErrorCode.UNSUPPORTED_LANGUAGE,
+        `Unsupported output language: ${request.outputLanguage}`,
+        { language: request.outputLanguage }
+      );
+    }
+
+    return context;
+  }
+
+  private async detectLanguage(context: ProcessingContext): Promise<ProcessingContext> {
+    const { request } = context;
+
+    if (this.config.enableAutoDetection && !request.inputLanguage) {
+      try {
+        const detection = await this.languageDetector.detectLanguage(
+          request.topic + ' ' + (request.keywords?.join(' ') || ''),
+          request.outputLanguage
+        );
+        
+        request.inputLanguage = detection.detectedLanguage;
+        request.requiresTranslation = request.inputLanguage !== request.outputLanguage;
+        
+        context.metadata.set('languageDetection', detection);
+      } catch (error) {
+        // Default to output language if detection fails
+        request.inputLanguage = request.outputLanguage;
+        request.requiresTranslation = false;
       }
     }
-    
-    // Classify request complexity
-    const complexity = this.requestClassifier.classifyComplexity(request)
-    const needsResearch = request.enableResearch || !!request.urlReference
-    const estimatedTokens = this.requestClassifier.estimateTokens(request, complexity)
-    
-    // Select optimal provider based on request characteristics
-    const recommendedProvider = this.selectProvider(request, complexity)
-    
-    // Determine cache strategy
-    const cacheStrategy = this.determineCacheStrategy(request, complexity)
-    
-    return {
-      cached: false,
-      needsResearch,
+
+    return context;
+  }
+
+  private async checkCache(context: ProcessingContext): Promise<ProcessingContext> {
+    if (!this.config.cacheEnabled) {
+      return context;
+    }
+
+    const cacheKey = this.cacheKeyGenerator.generateKey(context.request);
+    const cached = this.cache.get(cacheKey);
+
+    if (cached && cached.expiresAt > new Date()) {
+      // Cache hit
+      cached.hitCount++;
+      context.response = {
+        ...cached.response,
+        metadata: {
+          ...cached.response.metadata,
+          cacheHit: true,
+          processingTime: Date.now() - context.startTime,
+        },
+      };
+      
+      this.emit('cache:hit', cacheKey);
+      context.metadata.set('cacheKey', cacheKey);
+      return context;
+    }
+
+    this.emit('cache:miss', cacheKey);
+    context.metadata.set('cacheKey', cacheKey);
+    return context;
+  }
+
+  private async classifyRequest(context: ProcessingContext): Promise<ProcessingContext> {
+    const { request } = context;
+
+    // Estimate complexity based on various factors
+    const wordCount = request.wordCount || 500;
+    const hasTranslation = request.requiresTranslation || false;
+    const hasCulturalAdaptation = !!request.culturalContext;
+    const hasSEO = !!request.seoRequirements;
+
+    // Calculate complexity score
+    let complexityScore = 0;
+    complexityScore += wordCount > 1000 ? 2 : wordCount > 500 ? 1 : 0;
+    complexityScore += hasTranslation ? 1 : 0;
+    complexityScore += hasCulturalAdaptation ? 2 : 0;
+    complexityScore += hasSEO ? 1 : 0;
+    complexityScore += request.type === 'landing' || request.type === 'article' ? 1 : 0;
+
+    // Determine complexity level
+    let complexity: 'simple' | 'moderate' | 'complex';
+    if (complexityScore <= 1) complexity = 'simple';
+    else if (complexityScore <= 3) complexity = 'moderate';
+    else complexity = 'complex';
+
+    // Estimate tokens (rough approximation)
+    const estimatedTokens = Math.ceil(wordCount * 1.5 * (hasTranslation ? 2 : 1));
+
+    // Determine required capabilities
+    const requiredCapabilities: string[] = ['basic-generation'];
+    if (hasTranslation) requiredCapabilities.push('translation');
+    if (hasCulturalAdaptation) requiredCapabilities.push('cultural-adaptation');
+    if (complexity === 'complex') requiredCapabilities.push('complex-reasoning');
+
+    // Suggest model based on requirements
+    let suggestedModel: 'gpt-3.5' | 'gpt-4' | 'claude' | 'specialized';
+    if (complexity === 'simple' && !hasCulturalAdaptation) {
+      suggestedModel = 'gpt-3.5';
+    } else if (complexity === 'complex' || hasCulturalAdaptation) {
+      suggestedModel = request.outputLanguage === 'no' ? 'claude' : 'gpt-4';
+    } else {
+      suggestedModel = 'gpt-4';
+    }
+
+    const classification: RequestClassification = {
       complexity,
       estimatedTokens,
-      recommendedProvider,
-      cacheStrategy
+      requiredCapabilities,
+      suggestedModel,
+      languageRequirements: {
+        inputLang: request.inputLanguage || request.outputLanguage,
+        outputLang: request.outputLanguage,
+        requiresNativeGeneration: !hasTranslation,
+        requiresCulturalAdaptation: hasCulturalAdaptation,
+      },
+      priority: request.type === 'ad' || request.type === 'email' ? 'high' : 'medium',
+      estimatedProcessingTime: estimatedTokens * 10, // Rough estimate
+    };
+
+    context.classification = classification;
+    this.emit('request:classified', classification);
+    return context;
+  }
+
+  private async routeRequest(context: ProcessingContext): Promise<ProcessingContext> {
+    const { classification } = context;
+    if (!classification) {
+      throw new GatewayError(
+        GatewayErrorCode.ROUTING_FAILED,
+        'Request not classified',
+        { requestId: context.request.id }
+      );
     }
-  }
 
-  /**
-   * Generate unique cache key for request
-   */
-  private generateCacheKey(request: ContentRequest): string {
-    const keyComponents = [
-      request.content.toLowerCase().replace(/\s+/g, '-'),
-      request.purpose,
-      request.format,
-      request.tone,
-      request.targetAudience.toLowerCase(),
-      request.enableResearch ? 'research' : 'no-research',
-      request.urlReference ? `url-${btoa(request.urlReference).slice(0, 10)}` : ''
-    ].filter(Boolean)
-    
-    return `content:${keyComponents.join(':')}`
-  }
+    // Select appropriate model
+    const availableModels = Array.from(this.models.values())
+      .filter(m => m.languages.includes(context.request.outputLanguage))
+      .filter(m => this.hasRequiredCapabilities(m, classification.requiredCapabilities))
+      .sort((a, b) => a.priority - b.priority);
 
-  /**
-   * Cache response according to strategy
-   */
-  private async cacheResponse(
-    request: ContentRequest, 
-    response: ContentResponse, 
-    strategy: 'L1' | 'L2' | 'L3' | 'none'
-  ): Promise<void> {
-    if (strategy === 'none') return
-    
-    const cacheKey = this.generateCacheKey(request)
-    
-    // Determine TTL based on cache layer and content type
-    const ttl = this.getCacheTTL(strategy, request)
-    
-    await this.cache.set(cacheKey, response, ttl, strategy)
-  }
-
-  /**
-   * Get cache TTL based on strategy and content type
-   */
-  private getCacheTTL(strategy: 'L1' | 'L2' | 'L3', request: ContentRequest): number {
-    const baseTTL = {
-      L1: 5 * 60,      // 5 minutes
-      L2: 24 * 60 * 60, // 24 hours  
-      L3: 7 * 24 * 60 * 60 // 7 days
+    if (availableModels.length === 0) {
+      throw new GatewayError(
+        GatewayErrorCode.MODEL_UNAVAILABLE,
+        'No suitable model available',
+        { language: context.request.outputLanguage, capabilities: classification.requiredCapabilities }
+      );
     }
-    
-    // Adjust TTL based on content characteristics
-    let multiplier = 1
-    if (request.enableResearch) multiplier = 0.5 // Research content changes more frequently
-    if (request.templateId) multiplier = 2 // Template-based content is more stable
-    
-    return Math.floor(baseTTL[strategy] * multiplier)
-  }
 
-  /**
-   * Select optimal AI provider based on request characteristics
-   */
-  private selectProvider(request: ContentRequest, complexity: 'simple' | 'medium' | 'complex'): 'openai' | 'anthropic' {
-    // User preference takes priority
-    if (request.preferences?.preferredModel?.includes('gpt')) return 'openai'
-    if (request.preferences?.preferredModel?.includes('claude')) return 'anthropic'
-    
-    // Default selection based on complexity and purpose
-    if (complexity === 'complex' || request.purpose === 'thought-leadership') {
-      return 'openai' // GPT-4 for complex reasoning
+    const selectedModel = availableModels[0];
+    const estimatedCost = classification.estimatedTokens * selectedModel.costPerToken;
+
+    // Check cost thresholds
+    if (estimatedCost > this.config.costThresholds.critical) {
+      this.emit('cost:threshold', estimatedCost, this.config.costThresholds.critical);
+      throw new GatewayError(
+        GatewayErrorCode.COST_THRESHOLD_EXCEEDED,
+        'Estimated cost exceeds critical threshold',
+        { estimatedCost, threshold: this.config.costThresholds.critical }
+      );
+    } else if (estimatedCost > this.config.costThresholds.warning) {
+      this.emit('cost:threshold', estimatedCost, this.config.costThresholds.warning);
     }
-    
-    if (request.format === 'story' || request.tone === 'casual') {
-      return 'anthropic' // Claude for narrative and conversational content
+
+    // Build route decision
+    const route: RouteDecision = {
+      targetModel: selectedModel.id,
+      targetEndpoint: selectedModel.endpoint,
+      requiresPreprocessing: context.request.requiresTranslation || false,
+      preprocessingSteps: [],
+      requiresPostprocessing: !!context.request.culturalContext,
+      postprocessingSteps: [],
+      estimatedCost,
+      estimatedTime: classification.estimatedProcessingTime,
+    };
+
+    // Add preprocessing steps if needed
+    if (context.request.requiresTranslation) {
+      route.preprocessingSteps?.push({
+        type: 'translate',
+        config: {
+          from: context.request.inputLanguage,
+          to: context.request.outputLanguage,
+        },
+      });
     }
-    
-    return 'openai' // Default to OpenAI
-  }
 
-  /**
-   * Determine optimal cache strategy
-   */
-  private determineCacheStrategy(request: ContentRequest, complexity: 'simple' | 'medium' | 'complex'): 'L1' | 'L2' | 'L3' | 'none' {
-    // Research content - shorter cache duration
-    if (request.enableResearch) return 'L2'
-    
-    // Template-based content - longer cache duration
-    if (request.templateId) return 'L3'
-    
-    // User-specific patterns - medium cache duration
-    if (request.patterns?.length > 0) return 'L2'
-    
-    // Simple requests - short cache duration
-    if (complexity === 'simple') return 'L1'
-    
-    // Complex requests - medium cache duration
-    return 'L2'
-  }
-}
-
-/**
- * Request classifier to analyze complexity and requirements
- */
-class RequestClassifier {
-  classifyComplexity(request: ContentRequest): 'simple' | 'medium' | 'complex' {
-    let score = 0
-    
-    // Content length
-    if (request.content.length > 500) score += 2
-    else if (request.content.length > 200) score += 1
-    
-    // Research requirement
-    if (request.enableResearch) score += 2
-    if (request.urlReference) score += 1
-    
-    // Advanced features
-    if (request.templateId) score += 1
-    if (request.patterns?.length > 0) score += 1
-    if (request.purpose === 'thought-leadership') score += 2
-    
-    if (score >= 5) return 'complex'
-    if (score >= 2) return 'medium'
-    return 'simple'
-  }
-
-  estimateTokens(request: ContentRequest, complexity: 'simple' | 'medium' | 'complex'): number {
-    const baseTokens = {
-      simple: 300,
-      medium: 600,
-      complex: 1000
+    // Add postprocessing steps if needed
+    if (context.request.culturalContext) {
+      route.postprocessingSteps?.push({
+        type: 'adapt',
+        config: context.request.culturalContext,
+      });
     }
-    
-    let tokens = baseTokens[complexity]
-    
-    // Add tokens for research
-    if (request.enableResearch) tokens += 500
-    
-    // Add tokens for multiple variants
-    tokens *= 3 // short, medium, long variants
-    
-    return tokens
-  }
-}
 
-/**
- * Smart router to direct requests to appropriate processing functions
- */
-class SmartRouter {
-  private researchFunction: import('../functions/research-function').ResearchFunction
-  private generateFunction: import('../functions/generate-function').GenerateFunction
-  
-  constructor() {
-    this.initializeFunctions()
+    // Setup fallback route if enabled
+    if (this.config.enableFallback && context.request.outputLanguage === 'no') {
+      const fallbackModel = this.models.get('gpt-3.5-turbo');
+      if (fallbackModel) {
+        route.fallbackRoute = {
+          targetModel: fallbackModel.id,
+          targetEndpoint: fallbackModel.endpoint,
+          requiresPreprocessing: false,
+          requiresPostprocessing: true,
+          postprocessingSteps: [
+            {
+              type: 'translate',
+              config: { from: 'en', to: 'no' },
+            },
+          ],
+          estimatedCost: classification.estimatedTokens * fallbackModel.costPerToken,
+          estimatedTime: classification.estimatedProcessingTime * 1.5,
+        };
+      }
+    }
+
+    context.route = route;
+    context.costs.amount = estimatedCost;
+    this.emit('request:routed', route);
+    return context;
   }
-  
-  async routeToProcessing(request: ContentRequest, route: RouteDecision): Promise<ContentResponse> {
-    const startTime = Date.now()
+
+  private async processRequest(context: ProcessingContext): Promise<ProcessingContext> {
+    // Check if we should use mock service
+    const useMockService = process.env.MOCK_MODE === 'true' || 
+                          (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'sk-mock-development-key');
     
-    try {
-      // Step 1: Research phase (if needed)
-      let researchResult
-      if (route.needsResearch) {
-        researchResult = await this.researchFunction.research(request)
+    const processingTime = Date.now() - context.startTime;
+    const actualTokens = context.classification?.estimatedTokens || 100;
+
+    let generatedContent: string;
+    
+    if (useMockService) {
+      // Use mock service for development
+      const { mockAIService } = await import('../services/mock-ai-service');
+      const result = await mockAIService.generateContent({
+        contentType: context.request.type,
+        topic: context.request.topic,
+        audience: context.request.targetAudience,
+        tone: context.request.tone,
+        language: context.request.outputLanguage,
+        culturalContext: context.request.culturalContext
+      });
+      generatedContent = result.content;
+    } else {
+      // Use real AI service when configured
+      // This will be implemented when API keys are provided
+      generatedContent = `[Generated content for: ${context.request.topic} in ${context.request.outputLanguage}]`;
+    }
+
+    context.response = {
+      requestId: context.request.id,
+      content: generatedContent,
+      metadata: {
+        generatedLanguage: context.request.outputLanguage,
+        wasTranslated: context.request.requiresTranslation || false,
+        translationQuality: context.request.requiresTranslation ? 'translated' : 'native',
+        culturalAdaptations: context.request.culturalContext 
+          ? ['market-adaptation', 'formality-adjusted'] 
+          : undefined,
+        processingTime,
+        tokenUsage: {
+          prompt: Math.floor(actualTokens * 0.3),
+          completion: Math.floor(actualTokens * 0.7),
+          total: actualTokens,
+        },
+        model: useMockService ? 'mock-gpt-4' : (context.route?.targetModel || 'unknown'),
+        cost: context.costs.amount,
+        cacheHit: false,
+        fallbackUsed: false,
+      },
+    };
+
+    context.costs.tokens = actualTokens;
+    return context;
+  }
+
+  private async handleProcessingError(
+    error: Error,
+    context: ProcessingContext
+  ): Promise<ProcessingContext> {
+    context.errors.push(error);
+
+    // Try fallback if available
+    if (this.config.enableFallback && context.route?.fallbackRoute) {
+      this.emit('fallback:triggered', error.message);
+      
+      // Switch to fallback route
+      context.route = context.route.fallbackRoute;
+      context.metadata.set('fallbackReason', error.message);
+      
+      // Retry with fallback
+      return this.processRequest(context);
+    }
+
+    throw error;
+  }
+
+  private async postProcessResponse(context: ProcessingContext): Promise<ProcessingContext> {
+    if (!context.response || !context.route?.requiresPostprocessing) {
+      return context;
+    }
+
+    // Apply post-processing steps
+    for (const step of context.route.postprocessingSteps || []) {
+      switch (step.type) {
+        case 'translate':
+          // Placeholder for translation
+          context.response.metadata.wasTranslated = true;
+          context.response.metadata.translationQuality = 'translated';
+          break;
+        case 'adapt':
+          // Placeholder for cultural adaptation
+          context.response.metadata.culturalAdaptations = 
+            context.response.metadata.culturalAdaptations || [];
+          context.response.metadata.culturalAdaptations.push('post-adapted');
+          break;
+        case 'format':
+          // Placeholder for formatting
+          break;
+      }
+    }
+
+    return context;
+  }
+
+  private async cacheResponse(context: ProcessingContext): Promise<ProcessingContext> {
+    if (!this.config.cacheEnabled || !context.response || context.response.metadata.cacheHit) {
+      return context;
+    }
+
+    const cacheKey = context.metadata.get('cacheKey');
+    if (!cacheKey) {
+      return context;
+    }
+
+    const cacheEntry: CacheEntry = {
+      key: cacheKey,
+      request: context.request,
+      response: context.response,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + this.config.cacheTTL * 1000),
+      hitCount: 0,
+      language: context.request.outputLanguage,
+      tags: this.cacheKeyGenerator.generateTags(context.request),
+    };
+
+    this.cache.set(cacheKey, cacheEntry);
+    
+    // Cleanup old cache entries
+    this.cleanupCache();
+
+    return context;
+  }
+
+  private async updateMetrics(context: ProcessingContext): Promise<ProcessingContext> {
+    const language = context.request.outputLanguage;
+    const metrics = this.metrics.get(language);
+    
+    if (metrics && context.response) {
+      const processingTime = context.response.metadata.processingTime;
+      const prevAvg = metrics.averageProcessingTime;
+      const count = metrics.requestCount;
+      
+      metrics.requestCount++;
+      metrics.totalTokens += context.response.metadata.tokenUsage.total;
+      metrics.totalCost += context.response.metadata.cost;
+      metrics.averageProcessingTime = (prevAvg * count + processingTime) / (count + 1);
+      
+      if (context.response.metadata.wasTranslated) {
+        metrics.translationCount++;
       }
       
-      // Step 2: Content generation with research integration
-      const generateResult = await this.generateFunction.generate(request, researchResult)
+      if (context.response.metadata.fallbackUsed) {
+        metrics.fallbackCount++;
+      }
       
-      // Step 3: Quality validation (placeholder for now)
-      const qualityScore = this.validateQuality(generateResult.content)
+      if (context.errors.length > 0) {
+        metrics.errorRate = (metrics.errorRate * count + 1) / (count + 1);
+      } else {
+        metrics.errorRate = (metrics.errorRate * count) / (count + 1);
+      }
       
-      // Step 4: Build final response
-      return {
-        content: generateResult.content,
-        sources: researchResult?.sources || [],
-        citations: [], // Will be populated by citation processing
-        emoji: '💡', // Placeholder emoji
-        qualityScore,
-        metadata: {
-          processingTime: Date.now() - startTime,
-          tokensUsed: generateResult.tokensUsed + (researchResult?.tokensUsed || 0),
-          cacheHit: false,
-          provider: generateResult.metadata.provider,
-          confidence: generateResult.confidence
+      // Update cache hit rate
+      if (context.response.metadata.cacheHit) {
+        const cacheHits = Math.floor(metrics.cacheHitRate * count);
+        metrics.cacheHitRate = (cacheHits + 1) / (count + 1);
+      } else {
+        const cacheHits = Math.floor(metrics.cacheHitRate * count);
+        metrics.cacheHitRate = cacheHits / (count + 1);
+      }
+    }
+
+    // Update total cost
+    this.totalCost += context.costs.amount;
+
+    return context;
+  }
+
+  /**
+   * Helper methods
+   */
+
+  private hasRequiredCapabilities(
+    model: ModelCapabilities,
+    required: string[]
+  ): boolean {
+    return required.every(cap => model.features.includes(cap));
+  }
+
+  private cleanupCache(): void {
+    const now = new Date();
+    const keysToDelete: string[] = [];
+
+    this.cache.forEach((entry, key) => {
+      if (entry.expiresAt < now) {
+        keysToDelete.push(key);
+      }
+    });
+
+    keysToDelete.forEach(key => this.cache.delete(key));
+
+    // Limit cache size
+    if (this.cache.size > 10000) {
+      // Remove oldest entries
+      const entries = Array.from(this.cache.entries())
+        .sort((a, b) => a[1].createdAt.getTime() - b[1].createdAt.getTime());
+      
+      const toRemove = entries.slice(0, entries.length - 10000);
+      toRemove.forEach(([key]) => this.cache.delete(key));
+    }
+  }
+
+  /**
+   * Public API methods
+   */
+
+  public getMetrics(language?: SupportedLanguage): LanguageSpecificMetrics | Map<SupportedLanguage, LanguageSpecificMetrics> {
+    if (language) {
+      const metrics = this.metrics.get(language);
+      if (!metrics) {
+        throw new Error(`No metrics available for language: ${language}`);
+      }
+      return metrics;
+    }
+    return new Map(this.metrics);
+  }
+
+  public getTotalCost(): number {
+    return this.totalCost;
+  }
+
+  public clearCache(language?: SupportedLanguage): void {
+    if (language) {
+      // Clear cache for specific language
+      const pattern = this.cacheKeyGenerator.getInvalidationPattern(language);
+      const keysToDelete: string[] = [];
+      
+      this.cache.forEach((entry, key) => {
+        if (entry.language === language) {
+          keysToDelete.push(key);
         }
-      }
+      });
       
-    } catch (error) {
-      throw new Error(`Processing pipeline failed: ${error.message}`)
+      keysToDelete.forEach(key => this.cache.delete(key));
+    } else {
+      // Clear all cache
+      this.cache.clear();
     }
   }
-  
-  /**
-   * Basic quality validation (to be enhanced in Phase 3)
-   */
-  private validateQuality(content: ContentVariants): number {
-    let score = 0.7 // Base score
-    
-    // Check content length appropriateness
-    if (content.short.length >= 300 && content.short.length <= 500) score += 0.1
-    if (content.medium.length >= 800 && content.medium.length <= 1200) score += 0.1
-    if (content.long.length >= 1500 && content.long.length <= 2500) score += 0.1
-    
-    return Math.min(score, 1.0)
+
+  public getCacheStats(): {
+    size: number;
+    languages: Record<SupportedLanguage, number>;
+    hitRate: number;
+  } {
+    const languageStats: Record<SupportedLanguage, number> = { en: 0, no: 0 };
+    let totalHits = 0;
+    let totalRequests = 0;
+
+    this.cache.forEach(entry => {
+      languageStats[entry.language]++;
+      totalHits += entry.hitCount;
+    });
+
+    this.metrics.forEach(metrics => {
+      totalRequests += metrics.requestCount;
+    });
+
+    return {
+      size: this.cache.size,
+      languages: languageStats,
+      hitRate: totalRequests > 0 ? totalHits / totalRequests : 0,
+    };
   }
-  
-  private async initializeFunctions(): Promise<void> {
-    const { ResearchFunction } = await import('../functions/research-function')
-    const { GenerateFunction } = await import('../functions/generate-function')
-    
-    this.researchFunction = new ResearchFunction()
-    this.generateFunction = new GenerateFunction()
+
+  public updateConfig(config: Partial<GatewayConfig>): void {
+    this.config = { ...this.config, ...config };
+  }
+
+  public getQueueStatus(): {
+    size: number;
+    requests: string[];
+  } {
+    return {
+      size: this.requestQueue.size,
+      requests: Array.from(this.requestQueue.keys()),
+    };
+  }
+
+  public async healthCheck(): Promise<{
+    status: 'healthy' | 'degraded' | 'unhealthy';
+    details: Record<string, any>;
+  }> {
+    const checks = {
+      cache: this.config.cacheEnabled ? this.cache.size < 20000 : true,
+      queue: this.requestQueue.size < 100,
+      cost: this.totalCost < this.config.costThresholds.critical * 100,
+      models: this.models.size > 0,
+    };
+
+    const allHealthy = Object.values(checks).every(v => v === true);
+    const someHealthy = Object.values(checks).some(v => v === true);
+
+    return {
+      status: allHealthy ? 'healthy' : someHealthy ? 'degraded' : 'unhealthy',
+      details: {
+        checks,
+        metrics: {
+          totalRequests: Array.from(this.metrics.values()).reduce((sum, m) => sum + m.requestCount, 0),
+          totalCost: this.totalCost,
+          cacheSize: this.cache.size,
+          queueSize: this.requestQueue.size,
+        },
+      },
+    };
   }
 }

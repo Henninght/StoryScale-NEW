@@ -1,563 +1,907 @@
 /**
- * Generate Function - Unified content generation with built-in optimization
- * 
- * Part of Layer 2: Processing Functions
- * 
- * Responsibilities:
- * - Generate content in multiple length variants (short/medium/long)
- * - Support multiple AI providers with fallbacks
- * - Apply user patterns and templates
- * - Integrate research insights
- * - Built-in optimization for platform constraints
+ * Generate Function - Main Content Generation Orchestrator
+ * Coordinates AI generation with Norwegian cultural context and business optimization
  */
 
-import { ContentRequest, ContentResponse, UserPattern } from '../gateway/intelligent-gateway'
-import { ResearchResult } from './research-function'
+import { 
+  LanguageAwareRequest,
+  LanguageAwareResponse,
+  ValidationResult 
+} from '../gateway/content-gateway';
+import { CostGuardian } from '../monitoring/cost-guardian';
+import { MultiLayerCache } from '../cache/multi-layer-cache';
+import { ResearchFunction, ResearchResult } from './research-function';
+import { NorwegianAIProvider, NorwegianGenerationRequest, GenerationResponse } from '../generation/ai-providers';
+import { NorwegianVariantsGenerator, ContentVariant, VariantGenerationRequest } from '../generation/content-variants';
+import { NorwegianCulturalAdapter, CulturalAdaptationResult } from '../generation/cultural-adapter';
+import { NorwegianQualityScorer, QualityAssessment } from '../generation/quality-scorer';
+import { NORWEGIAN_CONTENT_PROMPTS } from '../generation/norwegian-prompts';
 
-export interface GenerateResult {
-  content: ContentVariants
-  metadata: GenerationMetadata
-  confidence: number
-  processingTime: number
-  tokensUsed: number
+/**
+ * Generation request with full context
+ */
+export interface GenerateRequest extends LanguageAwareRequest {
+  contentType: 'blogPost' | 'socialMedia' | 'email' | 'websiteCopy' | 'caseStudy' | 'pressRelease';
+  topic: string;
+  audience: string;
+  company?: string;
+  industry?: string;
+  tone?: 'professional' | 'casual' | 'authoritative' | 'friendly';
+  objectives?: string[];
+  keywords?: string[];
+  competitors?: string[];
+  uniqueSellingPoints?: string[];
+  constraints?: {
+    maxLength?: number;
+    minLength?: number;
+    requiredElements?: string[];
+    avoidTopics?: string[];
+  };
+  variants?: {
+    generateAll?: boolean;
+    lengths?: Array<'short' | 'medium' | 'long'>;
+    platforms?: string[];
+  };
+  quality?: {
+    minScore?: number;
+    culturalStrictness?: 'strict' | 'moderate' | 'relaxed';
+    requireReview?: boolean;
+  };
+  research?: {
+    enable?: boolean;
+    sources?: string[];
+    depth?: 'basic' | 'comprehensive' | 'exhaustive';
+  };
 }
 
-export interface ContentVariants {
-  short: string
-  medium: string
-  long: string
-  selected: string
+/**
+ * Complete generation response
+ */
+export interface GenerateResponse extends LanguageAwareResponse {
+  id: string;
+  status: 'success' | 'partial' | 'failed';
+  content: {
+    primary: GeneratedContent;
+    variants?: GeneratedContent[];
+  };
+  metadata: GenerationMetadata;
+  quality: QualityAssessment;
+  research?: ResearchResult[];
+  recommendations?: string[];
+  errors?: GenerationError[];
 }
 
+/**
+ * Generated content with full context
+ */
+export interface GeneratedContent {
+  text: string;
+  length: 'short' | 'medium' | 'long';
+  variant?: ContentVariant;
+  culturalAdaptation?: CulturalAdaptationResult;
+  platform?: string;
+  wordCount: number;
+  characterCount: number;
+  readingTime: number;
+  seoMetadata?: {
+    title?: string;
+    description?: string;
+    keywords?: string[];
+  };
+}
+
+/**
+ * Generation metadata
+ */
 export interface GenerationMetadata {
-  model: string
-  provider: 'openai' | 'anthropic'
-  prompt: string
-  patterns?: string[]
-  templateUsed?: string
-  researchIntegrated: boolean
+  generatedAt: Date;
+  provider: string;
+  model: string;
+  cost: number;
+  latency: number;
+  tokens: {
+    prompt: number;
+    completion: number;
+    total: number;
+  };
+  cacheStatus: 'hit' | 'miss' | 'partial';
+  iterations?: number;
+  improvementCycles?: number;
 }
 
-export interface AIProvider {
-  name: 'openai' | 'anthropic'
-  models: string[]
-  generate(request: GenerationRequest): Promise<GenerationResponse>
-  isHealthy(): Promise<boolean>
+/**
+ * Generation error details
+ */
+export interface GenerationError {
+  code: string;
+  message: string;
+  severity: 'critical' | 'warning' | 'info';
+  suggestion?: string;
 }
 
-export interface GenerationRequest {
-  prompt: string
-  model: string
-  temperature: number
-  maxTokens: number
-}
-
-export interface GenerationResponse {
-  content: string
-  tokens: number
-  confidence: number
-  model: string
-}
-
-export interface TemplateEngine {
-  getTemplate(templateId: string): Promise<ContentTemplate>
-  applyTemplate(template: ContentTemplate, content: string): string
-}
-
-export interface ContentTemplate {
-  id: string
-  name: string
-  structure: string[]
-  placeholders: Record<string, string>
-}
-
+/**
+ * Norwegian Content Generation Function
+ */
 export class GenerateFunction {
-  private aiProviders: Map<string, AIProvider> = new Map()
-  private templateEngine: TemplateEngine
-  private patternMatcher: PatternMatcher
-  
-  constructor() {
-    this.initializeProviders()
-    this.templateEngine = new MockTemplateEngine()
-    this.patternMatcher = new PatternMatcher()
+  private aiProvider: NorwegianAIProvider;
+  private variantsGenerator: NorwegianVariantsGenerator;
+  private culturalAdapter: NorwegianCulturalAdapter;
+  private qualityScorer: NorwegianQualityScorer;
+  private researchFunction: ResearchFunction;
+  private costGuardian: CostGuardian;
+  private cache: MultiLayerCache;
+
+  constructor(
+    costGuardian: CostGuardian,
+    cache: MultiLayerCache
+  ) {
+    this.costGuardian = costGuardian;
+    this.cache = cache;
+    
+    // Initialize components
+    this.aiProvider = new NorwegianAIProvider(costGuardian, cache);
+    this.variantsGenerator = new NorwegianVariantsGenerator(this.aiProvider);
+    this.culturalAdapter = new NorwegianCulturalAdapter();
+    this.qualityScorer = new NorwegianQualityScorer();
+    this.researchFunction = new ResearchFunction(costGuardian, cache);
   }
 
   /**
-   * Main generation function - create content variants with optimization
+   * Main generation orchestration
    */
-  async generate(
-    request: ContentRequest, 
-    researchResult?: ResearchResult
-  ): Promise<GenerateResult> {
-    const startTime = Date.now()
-    
+  async generate(request: GenerateRequest): Promise<GenerateResponse> {
+    const startTime = Date.now();
+    const generationId = this.generateId();
+    const errors: GenerationError[] = [];
+
     try {
-      // Select optimal AI provider and model
-      const provider = await this.selectProvider(request)
-      
-      // Build enhanced prompt with patterns, templates, and research
-      const enhancedPrompt = await this.buildEnhancedPrompt(request, researchResult)
-      
-      // Generate content variants in parallel
-      const variants = await this.generateContentVariants(provider, enhancedPrompt, request)
-      
-      // Apply pattern learning and optimization
-      const optimizedVariants = await this.applyPatternOptimization(variants, request.patterns)
-      
-      const metadata: GenerationMetadata = {
-        model: provider.models[0], // Current model
-        provider: provider.name,
-        prompt: enhancedPrompt,
-        patterns: request.patterns?.map(p => p.id) || [],
-        templateUsed: request.templateId,
-        researchIntegrated: !!researchResult?.sources.length
+      // Step 1: Validate request
+      const validation = this.validateRequest(request);
+      if (!validation.isValid) {
+        return this.createErrorResponse(
+          generationId,
+          validation.errors || ['Invalid request'],
+          request
+        );
       }
-      
-      return {
-        content: optimizedVariants,
-        metadata,
-        confidence: this.calculateOverallConfidence(variants),
-        processingTime: Date.now() - startTime,
-        tokensUsed: this.calculateTotalTokens(variants)
+
+      // Step 2: Check cache
+      const cacheKey = this.createCacheKey(request);
+      const cached = await this.checkCache(cacheKey);
+      if (cached && this.isCacheValid(cached, request)) {
+        return this.createCachedResponse(cached, generationId, request);
       }
+
+      // Step 3: Conduct research if enabled
+      let research: ResearchResult[] | undefined;
+      if (request.research?.enable) {
+        research = await this.conductResearch(request);
+      }
+
+      // Step 4: Generate primary content
+      const primaryContent = await this.generatePrimaryContent(
+        request,
+        research
+      );
+
+      // Step 5: Apply cultural adaptation
+      const culturallyAdapted = await this.applyCulturalAdaptation(
+        primaryContent,
+        request
+      );
+
+      // Step 6: Generate variants if requested
+      let variants: GeneratedContent[] | undefined;
+      if (request.variants?.generateAll || request.variants?.lengths) {
+        variants = await this.generateVariants(
+          culturallyAdapted,
+          request,
+          research
+        );
+      }
+
+      // Step 7: Assess quality
+      const qualityAssessment = await this.assessQuality(
+        culturallyAdapted,
+        request
+      );
+
+      // Step 8: Apply quality improvements if needed
+      let finalContent = culturallyAdapted;
+      let improvementCycles = 0;
       
+      while (qualityAssessment.overallScore < (request.quality?.minScore || 70) && 
+             improvementCycles < 3) {
+        finalContent = await this.improveContent(
+          finalContent,
+          qualityAssessment,
+          request,
+          research
+        );
+        
+        // Reassess quality
+        const newAssessment = await this.assessQuality(finalContent, request);
+        if (newAssessment.overallScore <= qualityAssessment.overallScore) {
+          break; // No improvement, stop trying
+        }
+        
+        Object.assign(qualityAssessment, newAssessment);
+        improvementCycles++;
+      }
+
+      // Step 9: Generate SEO metadata if applicable
+      if (this.requiresSEO(request.contentType)) {
+        finalContent = await this.addSEOMetadata(finalContent, request);
+      }
+
+      // Step 10: Create response
+      const response = this.createSuccessResponse(
+        generationId,
+        finalContent,
+        variants,
+        qualityAssessment,
+        research,
+        {
+          generatedAt: new Date(),
+          provider: primaryContent.provider,
+          model: primaryContent.model,
+          cost: primaryContent.cost,
+          latency: Date.now() - startTime,
+          tokens: primaryContent.tokenUsage,
+          cacheStatus: 'miss',
+          iterations: 1,
+          improvementCycles
+        },
+        request
+      );
+
+      // Step 11: Cache successful response
+      await this.cacheResponse(cacheKey, response);
+
+      // Step 12: Track metrics
+      await this.trackMetrics(response, request);
+
+      return response;
+
     } catch (error) {
-      // Try fallback provider
-      if (error.message.includes('rate limit') || error.message.includes('timeout')) {
-        console.warn('Primary provider failed, trying fallback...')
-        return await this.generateWithFallback(request, researchResult)
-      }
+      console.error('Generation failed:', error);
+      errors.push({
+        code: 'GENERATION_FAILED',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        severity: 'critical'
+      });
       
-      throw new Error(`Content generation failed: ${error.message}`)
+      return this.createErrorResponse(generationId, errors, request);
     }
   }
 
   /**
-   * Generate content variants (short, medium, long)
+   * Validate generation request
    */
-  private async generateContentVariants(
-    provider: AIProvider,
-    basePrompt: string,
-    request: ContentRequest
-  ): Promise<Record<string, GenerationResponse & { variant: string }>> {
-    // Generate all length variants in parallel for efficiency
-    const [shortContent, mediumContent, longContent] = await Promise.all([
-      this.generateVariant(provider, basePrompt, 'short', request),
-      this.generateVariant(provider, basePrompt, 'medium', request),
-      this.generateVariant(provider, basePrompt, 'long', request)
-    ])
-    
+  private validateRequest(request: GenerateRequest): ValidationResult {
+    const errors: string[] = [];
+
+    // Check required fields
+    if (!request.contentType) {
+      errors.push('Content type is required');
+    }
+    if (!request.topic) {
+      errors.push('Topic is required');
+    }
+    if (!request.audience) {
+      errors.push('Audience is required');
+    }
+
+    // Validate content type
+    const validContentTypes = Object.keys(NORWEGIAN_CONTENT_PROMPTS);
+    if (!validContentTypes.includes(request.contentType)) {
+      errors.push(`Invalid content type: ${request.contentType}`);
+    }
+
+    // Validate constraints
+    if (request.constraints) {
+      if (request.constraints.maxLength && request.constraints.minLength) {
+        if (request.constraints.maxLength < request.constraints.minLength) {
+          errors.push('Max length must be greater than min length');
+        }
+      }
+    }
+
     return {
-      short: { ...shortContent, variant: 'short' },
-      medium: { ...mediumContent, variant: 'medium' },
-      long: { ...longContent, variant: 'long' }
-    }
+      isValid: errors.length === 0,
+      errors: errors.length > 0 ? errors : undefined
+    };
   }
 
   /**
-   * Generate single content variant
+   * Conduct research for content generation
    */
-  private async generateVariant(
-    provider: AIProvider,
-    basePrompt: string,
-    length: 'short' | 'medium' | 'long',
-    request: ContentRequest
+  private async conductResearch(
+    request: GenerateRequest
+  ): Promise<ResearchResult[]> {
+    const researchRequest = {
+      query: request.topic,
+      language: request.language || 'no',
+      depth: request.research?.depth || 'comprehensive',
+      sources: request.research?.sources,
+      industry: request.industry,
+      culturalContext: request.culturalContext
+    };
+
+    const results = await this.researchFunction.research(researchRequest);
+    
+    // Filter and rank results
+    return results
+      .filter(r => r.relevanceScore >= 7)
+      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      .slice(0, 5); // Top 5 most relevant
+  }
+
+  /**
+   * Generate primary content
+   */
+  private async generatePrimaryContent(
+    request: GenerateRequest,
+    research?: ResearchResult[]
   ): Promise<GenerationResponse> {
-    const lengthSpecs = {
-      short: { 
-        chars: '300-500', 
-        description: 'concise and impactful',
-        maxTokens: 300
+    const generationRequest: NorwegianGenerationRequest = {
+      contentType: request.contentType,
+      topic: request.topic,
+      audience: request.audience,
+      company: request.company,
+      industry: request.industry,
+      tone: request.tone,
+      length: this.determineInitialLength(request),
+      research,
+      variables: {
+        objectives: request.objectives,
+        keywords: request.keywords,
+        uniqueSellingPoints: request.uniqueSellingPoints,
+        constraints: request.constraints
       },
-      medium: { 
-        chars: '800-1200', 
-        description: 'detailed and engaging',
-        maxTokens: 600
-      },
-      long: { 
-        chars: '1500-2500', 
-        description: 'comprehensive and thorough',
-        maxTokens: 1000
-      }
-    }
-    
-    const spec = lengthSpecs[length]
-    const prompt = `${basePrompt}
+      culturalStrictness: request.quality?.culturalStrictness
+    };
 
-IMPORTANT: Generate a ${spec.description} ${request.format} post that:
-- Is ${spec.chars} characters long
-- Uses ${request.tone} tone
-- Targets ${request.targetAudience}
-- Follows ${request.purpose} purpose
-- Format as ${request.format} with appropriate structure and flow
-
-Focus on creating engaging, valuable content that resonates with the target audience.`
-
-    return await provider.generate({
-      prompt,
-      model: provider.models[0], // Use primary model
-      temperature: 0.7,
-      maxTokens: spec.maxTokens
-    })
+    return await this.aiProvider.generateContent(generationRequest);
   }
 
   /**
-   * Build enhanced prompt with patterns, templates, and research
+   * Apply cultural adaptation
    */
-  private async buildEnhancedPrompt(
-    request: ContentRequest,
-    researchResult?: ResearchResult
+  private async applyCulturalAdaptation(
+    content: GenerationResponse,
+    request: GenerateRequest
+  ): Promise<GeneratedContent> {
+    const adaptation = await this.culturalAdapter.adaptContent(
+      content.content,
+      {
+        industry: request.industry,
+        audience: request.audience,
+        formality: this.determineFormality(request.tone),
+        companySize: this.inferCompanySize(request.company)
+      }
+    );
+
+    return {
+      text: adaptation.adaptedContent,
+      length: this.determineInitialLength(request),
+      culturalAdaptation: adaptation,
+      wordCount: this.countWords(adaptation.adaptedContent),
+      characterCount: adaptation.adaptedContent.length,
+      readingTime: this.calculateReadingTime(adaptation.adaptedContent)
+    };
+  }
+
+  /**
+   * Generate content variants
+   */
+  private async generateVariants(
+    baseContent: GeneratedContent,
+    request: GenerateRequest,
+    research?: ResearchResult[]
+  ): Promise<GeneratedContent[]> {
+    const variantRequest: VariantGenerationRequest = {
+      baseContent: baseContent.text,
+      contentType: request.contentType,
+      topic: request.topic,
+      audience: request.audience,
+      tone: request.tone || 'professional',
+      research,
+      generateAllLengths: request.variants?.generateAll || false,
+      targetPlatforms: request.variants?.platforms
+    };
+
+    const variants = await this.variantsGenerator.generateVariants(variantRequest);
+    
+    return variants.map(variant => ({
+      text: variant.content,
+      length: variant.length,
+      variant,
+      platform: variant.suitability.platform[0],
+      wordCount: variant.wordCount,
+      characterCount: variant.characterCount,
+      readingTime: variant.readingTime
+    }));
+  }
+
+  /**
+   * Assess content quality
+   */
+  private async assessQuality(
+    content: GeneratedContent,
+    request: GenerateRequest
+  ): Promise<QualityAssessment> {
+    return await this.qualityScorer.assessQuality(
+      content.text,
+      {
+        contentType: request.contentType,
+        audience: request.audience,
+        purpose: request.objectives?.join(', ') || 'general',
+        culturalAdaptation: content.culturalAdaptation,
+        variant: content.variant
+      }
+    );
+  }
+
+  /**
+   * Improve content based on quality assessment
+   */
+  private async improveContent(
+    content: GeneratedContent,
+    assessment: QualityAssessment,
+    request: GenerateRequest,
+    research?: ResearchResult[]
+  ): Promise<GeneratedContent> {
+    // Create improvement prompt based on issues
+    const improvementPrompt = this.createImprovementPrompt(
+      content.text,
+      assessment
+    );
+
+    // Generate improved version
+    const improved = await this.aiProvider.generateContent({
+      contentType: request.contentType,
+      topic: request.topic,
+      audience: request.audience,
+      tone: request.tone,
+      research,
+      variables: {
+        originalContent: content.text,
+        improvementPrompt,
+        issues: assessment.weaknesses
+      }
+    });
+
+    // Apply cultural adaptation to improved content
+    const adaptation = await this.culturalAdapter.adaptContent(
+      improved.content,
+      {
+        industry: request.industry,
+        audience: request.audience
+      }
+    );
+
+    return {
+      ...content,
+      text: adaptation.adaptedContent,
+      culturalAdaptation: adaptation,
+      wordCount: this.countWords(adaptation.adaptedContent),
+      characterCount: adaptation.adaptedContent.length
+    };
+  }
+
+  /**
+   * Create improvement prompt
+   */
+  private createImprovementPrompt(
+    content: string,
+    assessment: QualityAssessment
+  ): string {
+    const improvements = assessment.improvements
+      .filter(i => i.priority === 'critical' || i.priority === 'high')
+      .slice(0, 5);
+
+    return `Forbedre følgende innhold basert på disse punktene:
+
+FORBEDRINGSPUNKTER:
+${improvements.map(i => `- ${i.issue}: ${i.suggestion}`).join('\n')}
+
+ORIGINALT INNHOLD:
+${content}
+
+Generer en forbedret versjon som addresserer disse punktene samtidig som du beholder kjernebudskapet.`;
+  }
+
+  /**
+   * Add SEO metadata
+   */
+  private async addSEOMetadata(
+    content: GeneratedContent,
+    request: GenerateRequest
+  ): Promise<GeneratedContent> {
+    // Generate SEO title
+    const title = await this.generateSEOTitle(content.text, request);
+    
+    // Generate meta description
+    const description = await this.generateMetaDescription(content.text, request);
+    
+    // Extract/enhance keywords
+    const keywords = this.extractKeywords(content.text, request.keywords);
+
+    return {
+      ...content,
+      seoMetadata: {
+        title,
+        description,
+        keywords
+      }
+    };
+  }
+
+  /**
+   * Generate SEO title
+   */
+  private async generateSEOTitle(
+    content: string,
+    request: GenerateRequest
   ): Promise<string> {
-    let prompt = `Create a professional ${request.format} for ${request.targetAudience} with ${request.tone} tone.
-
-Topic: ${request.content}
-Purpose: ${request.purpose}`
-
-    // Add template structure if available
-    if (request.templateId) {
-      try {
-        const template = await this.templateEngine.getTemplate(request.templateId)
-        prompt += `\n\nFollow this proven structure: ${JSON.stringify(template.structure)}`
-      } catch (error) {
-        console.warn('Template not found:', request.templateId)
-      }
+    const firstLine = content.split('\n')[0];
+    const words = firstLine.split(' ');
+    
+    if (words.length <= 10) {
+      return firstLine;
     }
-
-    // Add pattern insights from user's successful content
-    if (request.patterns?.length > 0) {
-      const patternInsights = this.patternMatcher.extractInsights(request.patterns)
-      prompt += `\n\nApply these successful patterns from your previous content: ${patternInsights}`
-    }
-
-    // Integrate research insights and attribution requirements
-    if (researchResult?.sources.length > 0) {
-      prompt += `\n\nIncorporate these research insights: ${researchResult.insights.join('. ')}`
-      prompt += `\n\nWhen referencing research, use natural citation phrases like "According to [source name]..." or "Recent research suggests..."`
-      prompt += `\n\nAvailable sources: ${researchResult.sources.map(s => s.title).join(', ')}`
-    }
-
-    // Add platform-specific optimization hints
-    prompt += this.getPlatformOptimizationHints(request)
-
-    return prompt
+    
+    // Generate concise title
+    const titlePrompt = `Lag en SEO-vennlig tittel (maks 60 tegn) for: ${request.topic}`;
+    const response = await this.aiProvider.generateContent({
+      contentType: 'websiteCopy',
+      topic: titlePrompt,
+      audience: request.audience,
+      tone: request.tone,
+      length: 'short'
+    });
+    
+    return response.content.trim();
   }
 
   /**
-   * Get platform-specific optimization hints
+   * Generate meta description
    */
-  private getPlatformOptimizationHints(request: ContentRequest): string {
-    // LinkedIn-specific optimizations (primary platform)
-    let hints = '\n\nLinkedIn Optimization:'
+  private async generateMetaDescription(
+    content: string,
+    request: GenerateRequest
+  ): Promise<string> {
+    const descPrompt = `Lag en meta-beskrivelse (maks 160 tegn) som oppsummerer: ${content.substring(0, 500)}`;
+    const response = await this.aiProvider.generateContent({
+      contentType: 'websiteCopy',
+      topic: descPrompt,
+      audience: request.audience,
+      tone: request.tone,
+      length: 'short'
+    });
     
-    switch (request.format) {
-      case 'story':
-        hints += '\n- Start with a compelling hook\n- Include a personal anecdote\n- End with a clear lesson or takeaway'
-        break
-      case 'list':
-        hints += '\n- Use numbered points for easy scanning\n- Include actionable tips\n- Add brief explanations for each point'
-        break
-      case 'insight':
-        hints += '\n- Lead with the key insight\n- Provide supporting evidence\n- Include implications for the audience'
-        break
-      case 'question':
-        hints += '\n- Ask thought-provoking questions\n- Encourage engagement and discussion\n- Provide your own perspective'
-        break
-    }
-    
-    // Add general LinkedIn engagement tips
-    hints += '\n- Use line breaks for readability\n- Include 2-3 relevant hashtags\n- Consider adding a call-to-action'
-    
-    return hints
+    return response.content.trim();
   }
 
   /**
-   * Apply pattern learning and optimization
+   * Extract keywords from content
    */
-  private async applyPatternOptimization(
-    variants: Record<string, GenerationResponse & { variant: string }>,
-    patterns?: UserPattern[]
-  ): Promise<ContentVariants> {
-    const optimized: ContentVariants = {
-      short: variants.short.content,
-      medium: variants.medium.content,
-      long: variants.long.content,
-      selected: variants.medium.content // Default to medium
-    }
-
-    // Apply pattern-based optimizations if patterns available
-    if (patterns?.length > 0) {
-      const successfulPatterns = patterns.filter(p => p.type === 'successful_post')
-      
-      if (successfulPatterns.length > 0) {
-        // Apply successful post patterns to each variant
-        optimized.short = this.applyPatternOptimizations(optimized.short, successfulPatterns)
-        optimized.medium = this.applyPatternOptimizations(optimized.medium, successfulPatterns)
-        optimized.long = this.applyPatternOptimizations(optimized.long, successfulPatterns)
-        
-        // Select the variant that best matches user's successful patterns
-        optimized.selected = this.selectOptimalVariant(optimized, successfulPatterns)
+  private extractKeywords(
+    content: string,
+    providedKeywords?: string[]
+  ): string[] {
+    const keywords = new Set(providedKeywords || []);
+    
+    // Extract Norwegian business terms
+    const businessTerms = [
+      'innovasjon', 'bærekraft', 'digitalisering', 'strategi',
+      'vekst', 'effektivitet', 'kvalitet', 'samarbeid'
+    ];
+    
+    for (const term of businessTerms) {
+      if (content.toLowerCase().includes(term)) {
+        keywords.add(term);
       }
     }
-
-    return optimized
+    
+    return Array.from(keywords).slice(0, 10);
   }
 
   /**
-   * Apply pattern-based optimizations to content
+   * Helper methods
    */
-  private applyPatternOptimizations(content: string, patterns: UserPattern[]): string {
-    let optimizedContent = content
-    
-    // Apply common successful patterns
-    for (const pattern of patterns) {
-      if (pattern.pattern.engagement > 500) { // High engagement pattern
-        // Apply successful formatting or structure
-        if (pattern.pattern.hasEmoji) {
-          // Add emoji if successful pattern used them
-          optimizedContent = this.addStrategicEmojis(optimizedContent)
-        }
-        
-        if (pattern.pattern.hasHashtags) {
-          // Ensure hashtags are included
-          optimizedContent = this.ensureHashtags(optimizedContent)
-        }
-      }
+  private generateId(): string {
+    return `gen_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  private determineInitialLength(
+    request: GenerateRequest
+  ): 'short' | 'medium' | 'long' {
+    if (request.constraints?.maxLength) {
+      if (request.constraints.maxLength < 200) return 'short';
+      if (request.constraints.maxLength < 500) return 'medium';
+      return 'long';
     }
     
-    return optimizedContent
+    // Default by content type
+    const defaults: Record<string, 'short' | 'medium' | 'long'> = {
+      socialMedia: 'short',
+      email: 'medium',
+      blogPost: 'long',
+      caseStudy: 'long',
+      websiteCopy: 'medium',
+      pressRelease: 'medium'
+    };
+    
+    return defaults[request.contentType] || 'medium';
+  }
+
+  private determineFormality(
+    tone?: string
+  ): 'high' | 'medium' | 'low' {
+    if (tone === 'professional' || tone === 'authoritative') return 'high';
+    if (tone === 'casual') return 'low';
+    return 'medium';
+  }
+
+  private inferCompanySize(company?: string): 'startup' | 'SMB' | 'enterprise' {
+    if (!company) return 'SMB';
+    
+    const lower = company.toLowerCase();
+    if (lower.includes('startup') || lower.includes('gründer')) return 'startup';
+    if (lower.includes('as') || lower.includes('asa')) return 'enterprise';
+    return 'SMB';
+  }
+
+  private countWords(text: string): number {
+    return text.split(/\s+/).filter(w => w.length > 0).length;
+  }
+
+  private calculateReadingTime(text: string): number {
+    const wordsPerMinute = 200; // Norwegian reading speed
+    const words = this.countWords(text);
+    return Math.ceil(words / wordsPerMinute * 60); // in seconds
+  }
+
+  private requiresSEO(contentType: string): boolean {
+    return ['blogPost', 'websiteCopy', 'caseStudy'].includes(contentType);
   }
 
   /**
-   * Select optimal variant based on user patterns
+   * Cache management
    */
-  private selectOptimalVariant(variants: ContentVariants, patterns: UserPattern[]): string {
-    // Analyze user's successful post lengths
-    const avgSuccessfulLength = this.calculateAverageSuccessfulLength(patterns)
+  private createCacheKey(request: GenerateRequest): string {
+    const key = {
+      type: request.contentType,
+      topic: request.topic,
+      audience: request.audience,
+      tone: request.tone,
+      length: this.determineInitialLength(request),
+      industry: request.industry,
+      quality: request.quality?.culturalStrictness
+    };
     
-    if (avgSuccessfulLength < 600) return variants.short
-    if (avgSuccessfulLength > 1500) return variants.long
-    return variants.medium
+    return `generated_content:${JSON.stringify(key)}`;
+  }
+
+  private async checkCache(key: string): Promise<any> {
+    return await this.cache.get(key);
+  }
+
+  private isCacheValid(cached: any, request: GenerateRequest): boolean {
+    // Check if cached content meets quality requirements
+    if (request.quality?.minScore) {
+      if (!cached.quality || cached.quality.overallScore < request.quality.minScore) {
+        return false;
+      }
+    }
+    
+    // Check age (24 hours for most content)
+    const maxAge = request.contentType === 'pressRelease' ? 4 * 60 * 60 : 24 * 60 * 60;
+    const age = Date.now() - new Date(cached.metadata?.generatedAt).getTime();
+    
+    return age < maxAge * 1000;
+  }
+
+  private async cacheResponse(key: string, response: GenerateResponse): Promise<void> {
+    const ttl = response.content.primary.variant?.suitability.purpose.includes('SEO')
+      ? 7 * 24 * 60 * 60  // 7 days for SEO content
+      : 24 * 60 * 60;      // 24 hours for other content
+    
+    await this.cache.set(key, response, { ttl });
   }
 
   /**
-   * Select optimal AI provider based on request characteristics
+   * Response creation
    */
-  private async selectProvider(request: ContentRequest): Promise<AIProvider> {
-    // User preference takes priority
-    if (request.preferences?.preferredModel?.includes('gpt')) {
-      const openai = this.aiProviders.get('openai')
-      if (openai && await openai.isHealthy()) return openai
-    }
-    
-    if (request.preferences?.preferredModel?.includes('claude')) {
-      const anthropic = this.aiProviders.get('anthropic')
-      if (anthropic && await anthropic.isHealthy()) return anthropic
-    }
-    
-    // Default selection based on content characteristics
-    if (request.purpose === 'thought-leadership' || request.format === 'insight') {
-      const openai = this.aiProviders.get('openai')
-      if (openai && await openai.isHealthy()) return openai
-    }
-    
-    if (request.format === 'story' || request.tone === 'casual') {
-      const anthropic = this.aiProviders.get('anthropic')
-      if (anthropic && await anthropic.isHealthy()) return anthropic
-    }
-    
-    // Fallback to any healthy provider
-    for (const [name, provider] of this.aiProviders) {
-      if (await provider.isHealthy()) {
-        return provider
-      }
-    }
-    
-    throw new Error('No healthy AI providers available')
-  }
-
-  /**
-   * Generate with fallback provider
-   */
-  private async generateWithFallback(
-    request: ContentRequest,
-    researchResult?: ResearchResult
-  ): Promise<GenerateResult> {
-    // Try alternative provider
-    const providers = Array.from(this.aiProviders.values())
-    for (const provider of providers) {
-      try {
-        if (await provider.isHealthy()) {
-          const enhancedPrompt = await this.buildEnhancedPrompt(request, researchResult)
-          const variants = await this.generateContentVariants(provider, enhancedPrompt, request)
-          const optimizedVariants = await this.applyPatternOptimization(variants, request.patterns)
-          
-          return {
-            content: optimizedVariants,
-            metadata: {
-              model: provider.models[0],
-              provider: provider.name,
-              prompt: enhancedPrompt,
-              patterns: request.patterns?.map(p => p.id) || [],
-              researchIntegrated: !!researchResult?.sources.length
-            },
-            confidence: this.calculateOverallConfidence(variants),
-            processingTime: 0,
-            tokensUsed: this.calculateTotalTokens(variants)
-          }
-        }
-      } catch (error) {
-        console.warn(`Fallback provider ${provider.name} failed:`, error)
-        continue
-      }
-    }
-    
-    throw new Error('All AI providers unavailable')
-  }
-
-  /**
-   * Utility methods
-   */
-  private calculateOverallConfidence(variants: Record<string, GenerationResponse>): number {
-    const confidences = Object.values(variants).map(v => v.confidence)
-    return confidences.reduce((sum, conf) => sum + conf, 0) / confidences.length
-  }
-
-  private calculateTotalTokens(variants: Record<string, GenerationResponse>): number {
-    return Object.values(variants).reduce((sum, variant) => sum + variant.tokens, 0)
-  }
-
-  private calculateAverageSuccessfulLength(patterns: UserPattern[]): number {
-    const lengths = patterns
-      .filter(p => p.pattern.characterCount)
-      .map(p => p.pattern.characterCount)
-    
-    return lengths.length > 0 ? lengths.reduce((sum, len) => sum + len, 0) / lengths.length : 800
-  }
-
-  private addStrategicEmojis(content: string): string {
-    // Add emojis strategically without overdoing it
-    return content // Placeholder for emoji addition logic
-  }
-
-  private ensureHashtags(content: string): string {
-    // Ensure relevant hashtags are present
-    if (!content.includes('#')) {
-      content += '\n\n#leadership #growth #insights'
-    }
-    return content
-  }
-
-  /**
-   * Initialize AI providers
-   */
-  private initializeProviders(): void {
-    this.aiProviders.set('openai', new MockOpenAIProvider())
-    this.aiProviders.set('anthropic', new MockAnthropicProvider())
-  }
-}
-
-/**
- * Pattern matcher for analyzing user success patterns
- */
-class PatternMatcher {
-  extractInsights(patterns: UserPattern[]): string {
-    const insights: string[] = []
-    
-    const successfulPosts = patterns.filter(p => p.type === 'successful_post')
-    
-    if (successfulPosts.length > 0) {
-      const avgEngagement = successfulPosts.reduce((sum, p) => sum + (p.pattern.engagement || 0), 0) / successfulPosts.length
-      if (avgEngagement > 100) {
-        insights.push('Use engaging, conversational style that has worked well for you')
-      }
-      
-      const commonFormats = this.findCommonFormats(successfulPosts)
-      if (commonFormats.length > 0) {
-        insights.push(`Your most successful format is: ${commonFormats[0]}`)
-      }
-    }
-    
-    return insights.join('. ')
-  }
-
-  private findCommonFormats(patterns: UserPattern[]): string[] {
-    const formats = patterns.map(p => p.pattern.format).filter(Boolean)
-    const formatCounts = formats.reduce((acc, format) => {
-      acc[format] = (acc[format] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-    
-    return Object.entries(formatCounts)
-      .sort(([,a], [,b]) => b - a)
-      .map(([format]) => format)
-  }
-}
-
-/**
- * Mock template engine for development
- */
-class MockTemplateEngine implements TemplateEngine {
-  async getTemplate(templateId: string): Promise<ContentTemplate> {
-    // Mock template
-    return {
-      id: templateId,
-      name: 'Success Story Template',
-      structure: ['hook', 'story', 'lesson', 'call_to_action'],
-      placeholders: {
-        hook: 'Compelling opening',
-        story: 'Personal anecdote',
-        lesson: 'Key takeaway',
-        call_to_action: 'Engagement question'
-      }
-    }
-  }
-
-  applyTemplate(template: ContentTemplate, content: string): string {
-    return content // Placeholder for template application
-  }
-}
-
-/**
- * Mock AI providers for development
- */
-class MockOpenAIProvider implements AIProvider {
-  name: 'openai' = 'openai'
-  models = ['gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo']
-
-  async generate(request: GenerationRequest): Promise<GenerationResponse> {
-    // Mock generation
-    await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate API delay
+  private createSuccessResponse(
+    id: string,
+    primary: GeneratedContent,
+    variants: GeneratedContent[] | undefined,
+    quality: QualityAssessment,
+    research: ResearchResult[] | undefined,
+    metadata: GenerationMetadata,
+    request: GenerateRequest
+  ): GenerateResponse {
+    const recommendations = this.generateRecommendations(quality, request);
     
     return {
-      content: `Mock OpenAI generated content for: ${request.prompt.slice(0, 50)}...`,
-      tokens: request.maxTokens * 0.8,
-      confidence: 0.85,
-      model: request.model
-    }
+      id,
+      status: 'success',
+      content: {
+        primary,
+        variants
+      },
+      metadata,
+      quality,
+      research,
+      recommendations,
+      language: request.language || 'no',
+      culturalContext: request.culturalContext,
+      timestamp: new Date()
+    };
   }
 
-  async isHealthy(): Promise<boolean> {
-    return true
+  private createCachedResponse(
+    cached: any,
+    id: string,
+    request: GenerateRequest
+  ): GenerateResponse {
+    return {
+      ...cached,
+      id,
+      metadata: {
+        ...cached.metadata,
+        cacheStatus: 'hit'
+      },
+      timestamp: new Date()
+    };
   }
-}
 
-class MockAnthropicProvider implements AIProvider {
-  name: 'anthropic' = 'anthropic'
-  models = ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']
-
-  async generate(request: GenerationRequest): Promise<GenerationResponse> {
-    // Mock generation
-    await new Promise(resolve => setTimeout(resolve, 800)) // Simulate API delay
+  private createErrorResponse(
+    id: string,
+    errors: GenerationError[] | string[],
+    request: GenerateRequest
+  ): GenerateResponse {
+    const formattedErrors = errors.map(e => 
+      typeof e === 'string' 
+        ? { code: 'VALIDATION_ERROR', message: e, severity: 'critical' as const }
+        : e
+    );
     
     return {
-      content: `Mock Claude generated content for: ${request.prompt.slice(0, 50)}...`,
-      tokens: request.maxTokens * 0.75,
-      confidence: 0.9,
-      model: request.model
-    }
+      id,
+      status: 'failed',
+      content: {
+        primary: {
+          text: '',
+          length: 'short',
+          wordCount: 0,
+          characterCount: 0,
+          readingTime: 0
+        }
+      },
+      metadata: {
+        generatedAt: new Date(),
+        provider: 'none',
+        model: 'none',
+        cost: 0,
+        latency: 0,
+        tokens: { prompt: 0, completion: 0, total: 0 },
+        cacheStatus: 'miss'
+      },
+      quality: {
+        overallScore: 0,
+        dimensions: {
+          linguistic: { score: 0, grammar: 0, spelling: 0, punctuation: 0, flowAndRhythm: 0, sentenceVariation: 0, wordChoice: 0, issues: [] },
+          cultural: { score: 0, jantelovCompliance: 0, consensusLanguage: 0, culturalReferences: 0, appropriateness: 0, issues: [] },
+          business: { score: 0, professionalism: 0, terminology: 0, credibility: 0, persuasiveness: 0, actionability: 0, issues: [] },
+          technical: { score: 0, accuracy: 0, completeness: 0, structure: 0, seoOptimization: 0, accessibility: 0, issues: [] },
+          engagement: { score: 0, hookStrength: 0, readability: 0, emotionalConnection: 0, callToAction: 0, shareability: 0, issues: [] }
+        },
+        strengths: [],
+        weaknesses: [],
+        improvements: [],
+        grade: 'F',
+        readinessLevel: 'rejected'
+      },
+      errors: formattedErrors,
+      language: request.language || 'no',
+      culturalContext: request.culturalContext,
+      timestamp: new Date()
+    };
   }
 
-  async isHealthy(): Promise<boolean> {
-    return true
+  /**
+   * Generate recommendations
+   */
+  private generateRecommendations(
+    quality: QualityAssessment,
+    request: GenerateRequest
+  ): string[] {
+    const recommendations: string[] = [];
+    
+    // Quality-based recommendations
+    if (quality.overallScore < 70) {
+      recommendations.push('Vurder å kjøre en ny generering med strengere kvalitetskrav');
+    }
+    
+    if (quality.dimensions.cultural.jantelovCompliance < 80) {
+      recommendations.push('Juster innholdet for bedre Jantelov-tilpasning');
+    }
+    
+    // Content type specific
+    if (request.contentType === 'blogPost' && !request.keywords) {
+      recommendations.push('Legg til målrettede søkeord for bedre SEO');
+    }
+    
+    if (request.contentType === 'socialMedia' && !request.variants?.platforms) {
+      recommendations.push('Generer plattform-spesifikke varianter for optimal ytelse');
+    }
+    
+    // Research recommendations
+    if (!request.research?.enable && quality.dimensions.business.credibility < 70) {
+      recommendations.push('Aktiver forskning for å øke troverdighet med fakta og kilder');
+    }
+    
+    return recommendations;
+  }
+
+  /**
+   * Track generation metrics
+   */
+  private async trackMetrics(
+    response: GenerateResponse,
+    request: GenerateRequest
+  ): Promise<void> {
+    await this.costGuardian.trackUsage(
+      'generation',
+      response.metadata.cost,
+      {
+        contentType: request.contentType,
+        quality: response.quality.grade,
+        provider: response.metadata.provider,
+        cached: response.metadata.cacheStatus === 'hit'
+      }
+    );
+  }
+
+  /**
+   * Batch generation
+   */
+  async batchGenerate(
+    requests: GenerateRequest[]
+  ): Promise<GenerateResponse[]> {
+    const results: GenerateResponse[] = [];
+    const batchSize = 3; // Process 3 at a time
+    
+    for (let i = 0; i < requests.length; i += batchSize) {
+      const batch = requests.slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map(req => this.generate(req))
+      );
+      results.push(...batchResults);
+    }
+    
+    return results;
+  }
+
+  /**
+   * Stream generation for real-time output
+   */
+  async *streamGenerate(
+    request: GenerateRequest
+  ): AsyncGenerator<string, GenerateResponse, unknown> {
+    const response = await this.generate(request);
+    
+    // Stream the content word by word
+    const words = response.content.primary.text.split(' ');
+    for (const word of words) {
+      yield word + ' ';
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    
+    return response;
   }
 }

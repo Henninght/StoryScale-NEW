@@ -1,17 +1,33 @@
 /**
- * Research Function - Smart research with 24h caching
+ * Research Function - Smart research with Norwegian source support and 24h caching
  * 
  * Part of Layer 2: Processing Functions
  * 
  * Responsibilities:
- * - Gather relevant insights from external sources
+ * - Gather relevant insights from Norwegian and international sources
+ * - Language-aware source selection (Norwegian vs English)
+ * - Cultural relevance scoring for Norwegian business context
  * - Integrate with Firecrawl and Tavily APIs  
  * - Intelligent caching (24h TTL, 25% hit rate target)
- * - Prepare attribution data for citations
+ * - Prepare attribution data for citations in Norwegian/English
  * - Handle research failures gracefully
  */
 
 import { ContentRequest, ResearchSource } from '../gateway/intelligent-gateway'
+import {
+  LanguageAwareContentRequest,
+  SupportedLanguage,
+  CulturalContext,
+  RequestClassification
+} from '../types/language-aware-request'
+import { MultiLayerCache } from '../cache/multi-layer-cache'
+import { CostGuardian } from '../monitoring/cost-guardian'
+import { SourceRouter, SourceRoutingDecision, SourceSelection } from '../research/source-router'
+import { ContentAnalyzer, ContentAnalysis } from '../research/content-analyzer'
+import { CulturalEnhancer, CulturalEnhancement } from '../research/cultural-enhancer'
+import { AttributionGenerator, Attribution, AttributionOptions } from '../research/attribution-generator'
+import { NorwegianSource, getSourceByDomain } from '../research/norwegian-sources'
+import { apiSecurityManager } from '../security/api-security'
 
 export interface ResearchResult {
   sources: ResearchSource[]
@@ -20,6 +36,12 @@ export interface ResearchResult {
   processingTime: number
   tokensUsed: number
   cacheHit: boolean
+  language: SupportedLanguage
+  culturalEnhancement?: CulturalEnhancement
+  contentAnalysis?: ContentAnalysis
+  attributions: Attribution[]
+  routingDecision?: SourceRoutingDecision
+  cost: number
 }
 
 export interface FirecrawlProvider {
@@ -73,66 +95,179 @@ interface TavilySearchResult {
 export class ResearchFunction {
   private firecrawlProvider: FirecrawlProvider | null = null
   private tavilyProvider: TavilyProvider | null = null
-  private cacheManager: ResearchCacheManager
+  private cache: MultiLayerCache
+  private costGuardian: CostGuardian
+  private sourceRouter: SourceRouter
+  private contentAnalyzer: ContentAnalyzer
+  private culturalEnhancer: CulturalEnhancer
+  private attributionGenerator: AttributionGenerator
   
   constructor() {
     this.initializeProviders()
-    this.cacheManager = new ResearchCacheManager()
+    this.cache = MultiLayerCache.getInstance()
+    this.costGuardian = CostGuardian.getInstance()
+    this.sourceRouter = new SourceRouter({
+      preferNorwegian: true,
+      requireCulturalContext: true
+    })
+    this.contentAnalyzer = new ContentAnalyzer({
+      extractNorwegianTerms: true,
+      detectBusinessMetrics: true
+    })
+    this.culturalEnhancer = new CulturalEnhancer('no')
+    this.attributionGenerator = new AttributionGenerator({
+      language: 'no',
+      style: 'journalistic'
+    })
   }
 
   /**
-   * Main research function - gather insights for content enrichment
+   * Main research function - gather insights for content enrichment with Norwegian support
    */
-  async research(request: ContentRequest): Promise<ResearchResult> {
+  async research(
+    request: LanguageAwareContentRequest,
+    classification?: RequestClassification
+  ): Promise<ResearchResult> {
     const startTime = Date.now()
     
     // Skip research if not enabled
-    if (!request.enableResearch) {
+    if (!this.shouldPerformResearch(request)) {
       return {
         sources: [],
         insights: [],
         confidence: 1.0,
         processingTime: 0,
         tokensUsed: 0,
-        cacheHit: false
+        cacheHit: false,
+        language: request.outputLanguage || 'en',
+        attributions: [],
+        cost: 0
       }
     }
 
     try {
       // Check cache first (24h TTL for research results)
-      const cacheKey = this.generateCacheKey(request.content, request.urlReference)
-      const cachedResults = await this.cacheManager.get(cacheKey)
+      const cacheKey = this.generateCacheKey(request)
+      const cachedResults = await this.cache.get(cacheKey)
       
-      if (cachedResults) {
+      if (cachedResults && cachedResults.response) {
+        // Track cache hit
+        await this.costGuardian.trackRequestCost(
+          request,
+          { ...cachedResults.response, metadata: { ...cachedResults.response.metadata, cacheHit: true } },
+          { targetModel: 'cache', targetEndpoint: 'cache', estimatedCost: 0, estimatedTime: 0 }
+        )
+        
         return {
-          ...cachedResults,
+          ...(cachedResults.response as any),
           processingTime: Date.now() - startTime,
           cacheHit: true
         }
       }
 
-      // Gather research from multiple providers in parallel
-      const [firecrawlResults, tavilyResults] = await Promise.allSettled([
-        this.gatherFirecrawlInsights(request),
-        this.gatherTavilyInsights(request)
-      ])
+      // Route to appropriate sources based on language and context
+      const routingDecision = await this.sourceRouter.routeRequest(
+        request,
+        classification || this.createDefaultClassification(request)
+      )
+      
+      // Optimize for cost if needed
+      const optimizedRouting = this.sourceRouter.optimizeForCost(routingDecision)
+      
+      // Gather research from selected sources
+      const researchResults = await this.gatherResearchFromSources(
+        request,
+        optimizedRouting
+      )
 
+      // Analyze content quality and relevance
+      const contentAnalyses = await this.analyzeResearchContent(
+        researchResults,
+        request
+      )
+      
+      // Merge analyses
+      const mergedAnalysis = contentAnalyses.length > 0
+        ? this.contentAnalyzer.mergeAnalyses(contentAnalyses)
+        : undefined
+      
+      // Generate cultural enhancement for Norwegian content
+      const culturalEnhancement = request.outputLanguage === 'no' && mergedAnalysis
+        ? await this.culturalEnhancer.enhanceContent(
+            researchResults.map(r => r.content).join('\n'),
+            mergedAnalysis.keyInsights,
+            mergedAnalysis.businessMetrics,
+            mergedAnalysis.norwegianTerms
+          )
+        : undefined
+      
+      // Generate attributions
+      const attributions = this.generateAttributions(
+        researchResults,
+        request.outputLanguage
+      )
+      
       // Process and combine results
-      const sources = this.processResearchResults(firecrawlResults, tavilyResults)
-      const insights = await this.synthesizeInsights(sources, request.content)
-      const confidence = this.calculateConfidence(sources)
+      const sources = this.processResearchResults(researchResults)
+      const insights = mergedAnalysis ? mergedAnalysis.keyInsights.map(i => i.text) : []
+      const confidence = mergedAnalysis ? mergedAnalysis.relevanceScore : 0.5
 
+      // Calculate cost
+      const researchCost = optimizedRouting.estimatedCost
+      
       const result: ResearchResult = {
         sources,
         insights,
         confidence,
         processingTime: Date.now() - startTime,
-        tokensUsed: insights.length * 10, // Rough estimate
-        cacheHit: false
+        tokensUsed: this.estimateTokenUsage(insights),
+        cacheHit: false,
+        language: request.outputLanguage,
+        culturalEnhancement,
+        contentAnalysis: mergedAnalysis,
+        attributions,
+        routingDecision: optimizedRouting,
+        cost: researchCost
       }
 
       // Cache results for 24 hours
-      await this.cacheManager.set(cacheKey, result, 24 * 60 * 60)
+      await this.cache.set(cacheKey, {
+        request,
+        response: result as any,
+        metadata: {
+          language: request.outputLanguage,
+          cost: researchCost,
+          sources: sources.length
+        }
+      })
+      
+      // Track cost
+      await this.costGuardian.trackRequestCost(
+        request,
+        {
+          requestId: request.id,
+          content: insights.join('\n'),
+          metadata: {
+            generatedLanguage: request.outputLanguage,
+            wasTranslated: false,
+            processingTime: result.processingTime,
+            tokenUsage: {
+              prompt: 0,
+              completion: result.tokensUsed,
+              total: result.tokensUsed
+            },
+            model: 'research',
+            cost: researchCost,
+            cacheHit: false
+          }
+        },
+        {
+          targetModel: 'research',
+          targetEndpoint: 'multi-source',
+          estimatedCost: researchCost,
+          estimatedTime: result.processingTime
+        }
+      )
 
       return result
 
@@ -146,7 +281,10 @@ export class ResearchFunction {
         confidence: 0.5,
         processingTime: Date.now() - startTime,
         tokensUsed: 0,
-        cacheHit: false
+        cacheHit: false,
+        language: request.outputLanguage || 'en',
+        attributions: [],
+        cost: 0
       }
     }
   }
@@ -305,12 +443,251 @@ export class ResearchFunction {
   }
 
   /**
+   * Check if research should be performed
+   */
+  private shouldPerformResearch(request: LanguageAwareContentRequest): boolean {
+    // Check if research is explicitly disabled
+    if ('enableResearch' in request && !request.enableResearch) {
+      return false
+    }
+    
+    // Always perform research for Norwegian content
+    if (request.outputLanguage === 'no') {
+      return true
+    }
+    
+    // Perform research for complex requests
+    if (request.type === 'article' || request.type === 'blog') {
+      return true
+    }
+    
+    return false
+  }
+
+  /**
+   * Create default classification if not provided
+   */
+  private createDefaultClassification(request: LanguageAwareContentRequest): RequestClassification {
+    return {
+      complexity: 'moderate',
+      estimatedTokens: 1000,
+      requiredCapabilities: ['research', 'synthesis'],
+      suggestedModel: 'gpt-4',
+      languageRequirements: {
+        inputLang: request.inputLanguage || 'en',
+        outputLang: request.outputLanguage,
+        requiresNativeGeneration: request.outputLanguage === 'no',
+        requiresCulturalAdaptation: !!request.culturalContext
+      },
+      priority: 'medium',
+      estimatedProcessingTime: 5000
+    }
+  }
+
+  /**
+   * Gather research from selected sources
+   */
+  private async gatherResearchFromSources(
+    request: LanguageAwareContentRequest,
+    routing: SourceRoutingDecision
+  ): Promise<Array<{ source: string; content: string; url: string }>> {
+    const results: Array<{ source: string; content: string; url: string }> = []
+    
+    // Process primary sources
+    const primaryPromises = routing.primarySources.map(selection =>
+      this.fetchFromSource(selection, request)
+    )
+    
+    // Process secondary sources
+    const secondaryPromises = routing.secondarySources.map(selection =>
+      this.fetchFromSource(selection, request)
+    )
+    
+    // Process international sources if needed
+    const internationalPromises = routing.internationalSources.map(selection =>
+      this.fetchFromSource(selection, request)
+    )
+    
+    // Gather all results
+    const allPromises = [...primaryPromises, ...secondaryPromises, ...internationalPromises]
+    const settledResults = await Promise.allSettled(allPromises)
+    
+    // Process successful results
+    settledResults.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value) {
+        results.push(result.value)
+      }
+    })
+    
+    return results
+  }
+
+  /**
+   * Fetch from a single source
+   */
+  private async fetchFromSource(
+    selection: SourceSelection,
+    request: LanguageAwareContentRequest
+  ): Promise<{ source: string; content: string; url: string }> {
+    const sourceName = 'name' in selection.source ? selection.source.name : selection.source.domain
+    const sourceUrl = 'domain' in selection.source 
+      ? `https://${selection.source.domain}`
+      : `https://${selection.source.domain}`
+    
+    try {
+      // Use appropriate provider based on source
+      if (this.isFirecrawlSource(selection.source)) {
+        const result = await this.firecrawlProvider?.search({
+          query: selection.searchQuery,
+          limit: selection.maxResults,
+          includeLinkedIn: sourceName.includes('LinkedIn')
+        })
+        
+        if (result && result.length > 0) {
+          return {
+            source: sourceName,
+            content: result[0].content,
+            url: result[0].url
+          }
+        }
+      } else if (this.isTavilySource(selection.source)) {
+        const result = await this.tavilyProvider?.search({
+          query: selection.searchQuery,
+          search_depth: selection.searchDepth,
+          max_results: selection.maxResults,
+          include_domains: [sourceUrl.replace('https://', '')]
+        })
+        
+        if (result && result.length > 0) {
+          return {
+            source: sourceName,
+            content: result[0].content,
+            url: result[0].url
+          }
+        }
+      }
+    } catch (error) {
+      console.warn(`Failed to fetch from ${sourceName}:`, error)
+    }
+    
+    // Return empty result if fetch failed
+    return {
+      source: sourceName,
+      content: '',
+      url: sourceUrl
+    }
+  }
+
+  /**
+   * Check if source should use Firecrawl
+   */
+  private isFirecrawlSource(source: any): boolean {
+    if ('domain' in source) {
+      const firecrawlDomains = ['linkedin.com', 'medium.com', 'techcrunch.com']
+      return firecrawlDomains.some(domain => source.domain.includes(domain))
+    }
+    return false
+  }
+
+  /**
+   * Check if source should use Tavily
+   */
+  private isTavilySource(source: any): boolean {
+    return !this.isFirecrawlSource(source)
+  }
+
+  /**
+   * Analyze research content
+   */
+  private async analyzeResearchContent(
+    results: Array<{ source: string; content: string; url: string }>,
+    request: LanguageAwareContentRequest
+  ): Promise<ContentAnalysis[]> {
+    const analyses: ContentAnalysis[] = []
+    
+    for (const result of results) {
+      if (result.content) {
+        const sourceInfo = getSourceByDomain(result.url.replace(/https?:\/\//, '').split('/')[0])
+        const analysis = await this.contentAnalyzer.analyzeContent(
+          result.content,
+          sourceInfo || { domain: result.url, trustScore: 7 },
+          request.topic,
+          request.outputLanguage
+        )
+        analyses.push(analysis)
+      }
+    }
+    
+    return analyses
+  }
+
+  /**
+   * Generate attributions for sources
+   */
+  private generateAttributions(
+    results: Array<{ source: string; content: string; url: string }>,
+    language: SupportedLanguage
+  ): Attribution[] {
+    const options: AttributionOptions = {
+      language,
+      style: 'journalistic',
+      format: 'inline',
+      includeDate: true,
+      includeAuthor: false,
+      includeUrl: false,
+      useHyperlinks: false
+    }
+    
+    return results.map(result => 
+      this.attributionGenerator.generateAttribution(
+        {
+          name: result.source,
+          url: result.url,
+          type: 'news_article',
+          credibility: 0.8
+        },
+        undefined,
+        options
+      )
+    )
+  }
+
+  /**
+   * Process research results into sources
+   */
+  private processResearchResults(
+    results: Array<{ source: string; content: string; url: string }>
+  ): ResearchSource[] {
+    return results.map(result => ({
+      id: this.generateId(),
+      title: result.source,
+      url: result.url,
+      author: undefined,
+      date: new Date().toISOString(),
+      type: 'article',
+      provider: this.isFirecrawlSource({ domain: result.url }) ? 'firecrawl' : 'tavily',
+      relevanceScore: 0.8,
+      usedSnippets: []
+    }))
+  }
+
+  /**
+   * Estimate token usage
+   */
+  private estimateTokenUsage(insights: string[]): number {
+    // Rough estimate: ~4 characters per token
+    const totalChars = insights.join(' ').length
+    return Math.ceil(totalChars / 4)
+  }
+
+  /**
    * Generate cache key for research request
    */
-  private generateCacheKey(content: string, urlReference?: string): string {
-    const contentHash = content.toLowerCase().replace(/\s+/g, '-').slice(0, 50)
-    const urlHash = urlReference ? btoa(urlReference).slice(0, 10) : 'no-url'
-    return `research:${contentHash}:${urlHash}`
+  private generateCacheKey(request: LanguageAwareContentRequest): string {
+    const contentHash = request.topic.toLowerCase().replace(/\s+/g, '-').slice(0, 50)
+    const langHash = request.outputLanguage
+    const contextHash = request.culturalContext?.market || 'global'
+    return `research:${langHash}:${contextHash}:${contentHash}`
   }
 
   /**
@@ -351,10 +728,13 @@ export class ResearchFunction {
    */
   private initializeProviders(): void {
     try {
-      this.firecrawlProvider = new MockFirecrawlProvider() // Replace with real implementation
-      this.tavilyProvider = new MockTavilyProvider() // Replace with real implementation
+      this.firecrawlProvider = new FirecrawlAPIProvider() // Real Firecrawl API
+      this.tavilyProvider = new TavilyAPIProvider() // Real Tavily API
     } catch (error) {
       console.warn('Failed to initialize research providers:', error)
+      // Fall back to mock providers for development
+      this.firecrawlProvider = new MockFirecrawlProvider()
+      this.tavilyProvider = new MockTavilyProvider()
     }
   }
 }
@@ -384,8 +764,228 @@ class ResearchCacheManager {
 }
 
 /**
+ * Real Firecrawl API provider with security integration
+ */
+class FirecrawlAPIProvider implements FirecrawlProvider {
+  private baseURL = 'https://api.firecrawl.dev';
+
+  constructor() {
+    // Security manager handles API key validation
+  }
+
+  async scrape(url: string): Promise<ScrapedContent> {
+    // Security validation
+    const validation = await apiSecurityManager.validateRequest(
+      'firecrawl',
+      url,
+      'scrape_request',
+      'system'
+    );
+
+    if (!validation.allowed) {
+      throw new Error(`Security check failed: ${validation.reason}`);
+    }
+
+    const apiKey = apiSecurityManager.getSecureCredentials('firecrawl');
+    if (!apiKey) {
+      throw new Error('Firecrawl API credentials unavailable');
+    }
+
+    try {
+      const response = await fetch(`${this.baseURL}/v0/scrape`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          url: validation.sanitizedUrl || url,
+          formats: ['markdown'],
+          onlyMainContent: true,
+          timeout: 30000, // 30 second timeout
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Firecrawl API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Filter content for security
+      const rawContent = data.markdown || data.content || '';
+      const { filteredContent, flagged, safe } = apiSecurityManager.filterResponse(
+        rawContent,
+        validation.context
+      );
+
+      if (!safe) {
+        console.warn(`Content filtered from ${url}:`, flagged);
+      }
+      
+      return {
+        title: data.metadata?.title || 'Untitled',
+        content: filteredContent,
+        author: data.metadata?.author,
+        date: data.metadata?.publishedTime,
+      };
+    } catch (error) {
+      throw new Error(`Firecrawl scrape failed: ${error.message}`);
+    }
+  }
+
+  async search(query: SearchQuery): Promise<SearchResult[]> {
+    // Security validation
+    const validation = await apiSecurityManager.validateRequest(
+      'firecrawl',
+      'https://api.firecrawl.dev/search', // Mock URL for validation
+      query.query,
+      'system'
+    );
+
+    if (!validation.allowed) {
+      throw new Error(`Security check failed: ${validation.reason}`);
+    }
+
+    const apiKey = apiSecurityManager.getSecureCredentials('firecrawl');
+    if (!apiKey) {
+      throw new Error('Firecrawl API credentials unavailable');
+    }
+
+    try {
+      const response = await fetch(`${this.baseURL}/v0/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          query: validation.sanitizedQuery || query.query,
+          pageOptions: {
+            onlyMainContent: true,
+          },
+          limit: Math.min(query.limit, 10), // Cap at 10 results for security
+          timeout: 30000,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Firecrawl API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      return (data.data || []).map((result: any) => {
+        // Filter each result's content
+        const rawContent = result.markdown || result.content || '';
+        const { filteredContent } = apiSecurityManager.filterResponse(
+          rawContent,
+          validation.context
+        );
+
+        return {
+          title: result.metadata?.title || 'Untitled',
+          url: result.metadata?.sourceURL || '',
+          content: filteredContent,
+          author: result.metadata?.author,
+          date: result.metadata?.publishedTime,
+          relevanceScore: 0.8, // Firecrawl doesn't provide relevance score
+        };
+      });
+    } catch (error) {
+      throw new Error(`Firecrawl search failed: ${error.message}`);
+    }
+  }
+}
+
+/**
+ * Real Tavily API provider with security integration
+ */
+class TavilyAPIProvider implements TavilyProvider {
+  private baseURL = 'https://api.tavily.com';
+
+  constructor() {
+    // Security manager handles API key validation
+  }
+
+  async search(query: TavilySearchQuery): Promise<TavilySearchResult[]> {
+    // Security validation
+    const validation = await apiSecurityManager.validateRequest(
+      'tavily',
+      'https://api.tavily.com/search', // Mock URL for validation
+      query.query,
+      'system'
+    );
+
+    if (!validation.allowed) {
+      throw new Error(`Security check failed: ${validation.reason}`);
+    }
+
+    const apiKey = apiSecurityManager.getSecureCredentials('tavily');
+    if (!apiKey) {
+      throw new Error('Tavily API credentials unavailable');
+    }
+
+    try {
+      // Merge security-blocked domains with query exclusions
+      const securityBlockedDomains = [
+        'facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com'
+      ];
+      const excludeDomains = [
+        ...securityBlockedDomains,
+        ...(query.exclude_domains || [])
+      ];
+
+      const response = await fetch(`${this.baseURL}/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          api_key: apiKey,
+          query: validation.sanitizedQuery || query.query,
+          search_depth: query.search_depth,
+          max_results: Math.min(query.max_results, 10), // Cap results
+          include_answer: false,
+          include_raw_content: false,
+          include_domains: query.include_domains,
+          exclude_domains: excludeDomains,
+          timeout: 30000,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Tavily API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      return (data.results || []).map((result: any) => {
+        // Filter each result's content
+        const rawContent = result.content || '';
+        const { filteredContent } = apiSecurityManager.filterResponse(
+          rawContent,
+          validation.context
+        );
+
+        return {
+          title: result.title || 'Untitled',
+          url: result.url || '',
+          content: filteredContent,
+          author: result.author,
+          published_date: result.published_date,
+          score: result.score || 0.5,
+        };
+      });
+    } catch (error) {
+      throw new Error(`Tavily search failed: ${error.message}`);
+    }
+  }
+}
+
+/**
  * Mock Firecrawl provider for development
- * Replace with actual Firecrawl implementation
+ * Used as fallback when API keys are not available
  */
 class MockFirecrawlProvider implements FirecrawlProvider {
   async scrape(url: string): Promise<ScrapedContent> {
@@ -413,7 +1013,7 @@ class MockFirecrawlProvider implements FirecrawlProvider {
 
 /**
  * Mock Tavily provider for development
- * Replace with actual Tavily implementation
+ * Used as fallback when API keys are not available
  */
 class MockTavilyProvider implements TavilyProvider {
   async search(query: TavilySearchQuery): Promise<TavilySearchResult[]> {
