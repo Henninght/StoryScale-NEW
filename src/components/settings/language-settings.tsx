@@ -87,7 +87,7 @@ export function LanguageSettings({ className }: LanguageSettingsProps) {
               {t('language.settings.autoDetect', 'Auto-detect from browser')}
             </div>
             <div className="text-sm text-gray-500">
-              Automatically use your browser's language preference
+              Automatically use your browser&apos;s language preference
             </div>
           </div>
           <button
@@ -162,12 +162,7 @@ export function LanguageSettings({ className }: LanguageSettingsProps) {
         <h4 className="font-medium text-gray-900 mb-2">Current Status</h4>
         <div className="space-y-1 text-sm text-gray-600">
           <div>Active Language: {SUPPORTED_LANGUAGES[language].flag} {SUPPORTED_LANGUAGES[language].nativeName}</div>
-          <div>Storage: {isAuthenticated ? 'Cloud (Supabase)' : 'Local (Guest)'}</div>
-          {temporaryOverride && (
-            <div className="text-amber-600">
-              Temporary override active (wizard session)
-            </div>
-          )}
+          <div>Storage: {'Cloud (Supabase)'}</div>
         </div>
       </div>
     </div>

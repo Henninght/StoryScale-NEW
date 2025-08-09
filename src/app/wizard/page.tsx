@@ -192,7 +192,7 @@ export default function WizardPage() {
                     ) : (
                       <>
                         <p><strong>Headline:</strong> How Modern Businesses Can Increase Profitability Through Digital Transformation</p>
-                        <p>In today's competitive marketplace, companies must embrace digital solutions to maintain their market position. Through strategic technology implementation, businesses can significantly increase their revenue...</p>
+                        <p>In today&apos;s competitive marketplace, companies must embrace digital solutions to maintain their market position. Through strategic technology implementation, businesses can significantly increase their revenue...</p>
                       </>
                     )}
                   </div>

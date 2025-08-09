@@ -352,15 +352,16 @@ export class MemoryCache extends EventEmitter {
     });
 
     if (oldestKey && oldestEntry) {
+      const entry = oldestEntry as MemoryCacheEntry;
       this.cache.delete(oldestKey);
       this.stats.evictions++;
-      this.stats.sizeInBytes -= oldestEntry.sizeInBytes;
-      this.stats.languageDistribution[oldestEntry.language]--;
+      this.stats.sizeInBytes -= entry.sizeInBytes;
+      this.stats.languageDistribution[entry.language]--;
       this.stats.size = this.cache.size;
 
       this.emit('cache:evict', {
         key: oldestKey,
-        language: oldestEntry.language,
+        language: entry.language,
         reason: 'lru',
       });
     }

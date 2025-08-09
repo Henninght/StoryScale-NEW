@@ -49,7 +49,7 @@ interface RedisMetadata {
 }
 
 export class RedisCache extends EventEmitter {
-  private client: Redis;
+  private client!: Redis;
   private stats: RedisCacheStats;
   private config: RedisCacheConfig;
   private keyGenerator: CacheKeyGenerator;
@@ -609,7 +609,7 @@ export class RedisCache extends EventEmitter {
       return {
         healthy: false,
         latency: Date.now() - startTime,
-        details: { error: error.message },
+        details: { error: error instanceof Error ? error.message : String(error) },
       };
     }
   }

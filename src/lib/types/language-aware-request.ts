@@ -34,6 +34,7 @@ export interface LanguageAwareContentRequest extends BaseContentRequest {
   outputLanguage: SupportedLanguage; // Required output language
   culturalContext?: CulturalContext; // Norwegian business adaptation
   requiresTranslation?: boolean; // If input and output languages differ
+  enableResearch?: boolean; // Enable web research for content enrichment
   glossary?: Record<string, string>; // Domain-specific translations
   seoRequirements?: {
     primaryKeyword: string;

@@ -205,7 +205,7 @@ export class FunctionComposer extends EventEmitter {
           errors: [{
             stepId: 'composition',
             function: 'composer',
-            error: error.message,
+            error: error instanceof Error ? error.message : String(error),
             timestamp: Date.now(),
             recoverable: false,
           }],
@@ -384,7 +384,7 @@ export class FunctionComposer extends EventEmitter {
             functionsExecuted.push('generate-fallback');
             fallbacksUsed.push('generate');
           } catch (fallbackError) {
-            throw new Error(`Generation failed and fallback failed: ${error.message}`);
+            throw new Error(`Generation failed and fallback failed: ${error instanceof Error ? error.message : String(error)}`);
           }
         } else {
           throw error;
@@ -490,7 +490,7 @@ export class FunctionComposer extends EventEmitter {
     } catch (error) {
       const executionTime = performance.now() - startTime;
       
-      throw new Error(`Plan execution failed: ${error.message}`);
+      throw new Error(`Plan execution failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

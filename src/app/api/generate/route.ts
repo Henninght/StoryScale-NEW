@@ -13,7 +13,7 @@ import { hybridProcessor } from '@/lib/processors/hybrid-processor'
 import { withSecurity, validateResearchRequest } from '@/lib/middleware/security-middleware'
 
 // Initialize the hybrid processor (singleton pattern for performance)
-let processor = hybridProcessor
+const processor = hybridProcessor
 
 // Secure POST handler
 const securePostHandler = withSecurity({
@@ -57,13 +57,11 @@ export const POST = securePostHandler(async (request: NextRequest) => {
       }
     }
     
-    // Build content request
+    // Build content request - map to correct interface
     const contentRequest: LanguageAwareContentRequest = {
       id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      type: body.type || 'linkedin-post',
+      type: (body.type === 'linkedin-post' ? 'social' : body.type) || 'social', // Map linkedin-post to social
       topic: body.content || 'No topic provided',
-      purpose: body.purpose || 'thought-leadership',
-      format: body.format || 'insight',
       keywords: body.keywords,
       tone: body.tone || 'professional',
       targetAudience: body.targetAudience || 'business professionals',
@@ -95,7 +93,7 @@ export const POST = securePostHandler(async (request: NextRequest) => {
       strategy_used: result.strategy_used,
       processing_time: result.processing_time,
       quality_score: result.metadata.quality_score,
-      functions_executed: result.metadata.functionsExecuted || [],
+      functions_executed: result.new_architecture_result?.metadata?.functionsExecuted || [],
       feature_flags: result.metadata.feature_flags_applied
     })
     

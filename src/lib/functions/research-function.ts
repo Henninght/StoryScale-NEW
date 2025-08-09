@@ -1029,3 +1029,6 @@ class MockTavilyProvider implements TavilyProvider {
     ]
   }
 }
+
+// Export singleton instance
+export const researchFunction = new ResearchFunction();

@@ -905,3 +905,6 @@ Generer en forbedret versjon som addresserer disse punktene samtidig som du beho
     return response;
   }
 }
+
+// Export singleton instance
+export const generateFunction = new GenerateFunction();

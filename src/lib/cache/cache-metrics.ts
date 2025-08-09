@@ -288,7 +288,7 @@ export class CacheMetrics extends EventEmitter {
     return {
       timestamp: new Date(),
       layers: Object.fromEntries(this.layerMetrics),
-      languages: Object.fromEntries(this.languageMetrics),
+      languages: Object.fromEntries(this.languageMetrics) as Record<SupportedLanguage, LanguageMetrics>,
       overall: {
         totalRequests,
         totalHits,

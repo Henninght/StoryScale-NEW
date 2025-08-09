@@ -34,7 +34,9 @@
       "Bash(npx jest:*)",
       "Bash(grep:*)",
       "Bash(npx playwright test:*)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(gh run list:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": []
   }
