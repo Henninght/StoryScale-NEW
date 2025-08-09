@@ -261,7 +261,7 @@ interface AllTheProvidersProps {
  */
 function AllTheProviders({ children }: AllTheProvidersProps) {
   // Add your providers here (Context, Theme, etc.)
-  return <>{children}</>
+  return children
 }
 
 /**

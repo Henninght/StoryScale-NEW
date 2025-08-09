@@ -181,8 +181,8 @@ const customJestConfig = {
   // Test timeout
   testTimeout: 10000,
   
-  // Setup timeout
-  setupFilesAfterEnvTimeout: 10000,
+  // Setup timeout (removed setupFilesAfterEnvTimeout - not valid in Jest 29)
+  // setupFilesAfterEnvTimeout: 10000,
 }
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
