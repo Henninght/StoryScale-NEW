@@ -428,14 +428,16 @@ export class ProviderCostManager {
     });
 
     // Filter by quality threshold
-    if (requirements.minQuality) {
-      candidates = candidates.filter(m => m.qualityScore >= requirements.minQuality);
+    if (requirements.minQuality !== undefined) {
+      const minQuality = requirements.minQuality;
+      candidates = candidates.filter(m => m.qualityScore >= minQuality);
     }
 
     // Filter by cost threshold
-    if (requirements.maxCost) {
+    if (requirements.maxCost !== undefined) {
+      const maxCost = requirements.maxCost;
       candidates = candidates.filter(m => 
-        (m.inputPricing + m.outputPricing) / 2 <= requirements.maxCost
+        (m.inputPricing + m.outputPricing) / 2 <= maxCost
       );
     }
 
