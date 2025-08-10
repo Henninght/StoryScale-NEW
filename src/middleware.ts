@@ -26,6 +26,7 @@ export async function middleware(request: NextRequest) {
         '/api/auth/callback', 
         '/api/test/guest-session',
         '/api/test',  // Add test endpoint
+        '/api/test-research', // Add research test endpoint
         '/api/generate', // Add generate endpoint for testing
         '/api/architecture' // Add architecture info endpoint
       ]

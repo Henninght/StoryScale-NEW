@@ -767,13 +767,34 @@ export class ResearchFunction {
    * Initialize research providers
    */
   private initializeProviders(): void {
-    try {
-      this.firecrawlProvider = new FirecrawlAPIProvider() // Real Firecrawl API
-      this.tavilyProvider = new TavilyAPIProvider() // Real Tavily API
-    } catch (error) {
-      console.warn('Failed to initialize research providers:', error)
-      // Fall back to mock providers for development
+    // Check if API keys are available
+    const firecrawlKey = process.env.FIRECRAWL_API_KEY
+    const tavilyKey = process.env.TAVILY_API_KEY
+    
+    // Use real providers if API keys are available, otherwise use mock providers
+    if (firecrawlKey) {
+      try {
+        this.firecrawlProvider = new FirecrawlAPIProvider()
+        console.log('Initialized Firecrawl API provider')
+      } catch (error) {
+        console.warn('Failed to initialize Firecrawl provider:', error)
+        this.firecrawlProvider = new MockFirecrawlProvider()
+      }
+    } else {
+      console.log('Firecrawl API key not found, using mock provider')
       this.firecrawlProvider = new MockFirecrawlProvider()
+    }
+    
+    if (tavilyKey) {
+      try {
+        this.tavilyProvider = new TavilyAPIProvider()
+        console.log('Initialized Tavily API provider')
+      } catch (error) {
+        console.warn('Failed to initialize Tavily provider:', error)
+        this.tavilyProvider = new MockTavilyProvider()
+      }
+    } else {
+      console.log('Tavily API key not found, using mock provider')
       this.tavilyProvider = new MockTavilyProvider()
     }
   }
