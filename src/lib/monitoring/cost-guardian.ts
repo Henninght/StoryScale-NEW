@@ -13,7 +13,7 @@ import {
 import { CostCalculator, CostBreakdown, LanguageCostMultiplier } from './cost-calculator';
 import { BudgetAlertSystem, BudgetAlert, AlertSeverity } from './budget-alerts';
 import { UsageAnalytics, UsagePattern, CostOptimizationSuggestion } from './usage-analytics';
-import { ProviderCostModel, AIProvider } from './provider-costs';
+import { ProviderCostModel, AIProvider as AIProviderModel } from './provider-costs';
 
 // Cost tracking events
 export interface CostGuardianEvents {
@@ -128,8 +128,8 @@ export class CostGuardian extends EventEmitter {
   private analytics: UsageAnalytics;
   private costEntries: Map<string, CostEntry>;
   private userQuotas: Map<string, UserQuota>;
-  private realTimeMetrics: RealTimeCostMetrics;
-  private optimizationSettings: CostOptimizationSettings;
+  private realTimeMetrics!: RealTimeCostMetrics;
+  private optimizationSettings!: CostOptimizationSettings;
   private costHistory: CostEntry[] = [];
   private providerModels: Map<AIProvider, ProviderCostModel>;
 
@@ -677,7 +677,13 @@ export class CostGuardian extends EventEmitter {
   public async compareProviders(
     request: LanguageAwareContentRequest
   ): Promise<ProviderComparison> {
-    const providers: typeof ProviderComparison.prototype.providers = [];
+    const providers: Array<{
+      name: AIProvider;
+      estimatedCost: number;
+      features: string[];
+      reliability: number;
+      speedScore: number;
+    }> = [];
 
     // Evaluate each provider
     for (const [provider, model] of this.providerModels) {
@@ -687,12 +693,11 @@ export class CostGuardian extends EventEmitter {
       );
 
       providers.push({
-        provider,
-        model: model.models[0].id, // Use primary model
+        name: provider,
         estimatedCost: estimation.cost,
-        estimatedTime: estimation.time,
-        languageSupport: this.getLanguageSupport(provider, request.outputLanguage),
-        confidence: estimation.confidence,
+        features: model.features || [],
+        reliability: model.reliability || 0.95,
+        speedScore: model.speedScore || 0.8,
       });
     }
 

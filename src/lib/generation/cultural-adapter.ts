@@ -402,7 +402,7 @@ export class NorwegianCulturalAdapter {
     }
 
     // Replace "I/me" with "we/us"
-    const individualPronouns = [
+    const individualPronouns: Array<[RegExp, string]> = [
       [/\bjeg\b/gi, 'vi'],
       [/\bmeg\b/gi, 'oss'],
       [/\bmin\b/gi, 'vår'],

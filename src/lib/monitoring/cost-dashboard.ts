@@ -10,8 +10,8 @@
  */
 
 import { SupportedLanguage } from '../types/language-aware-request';
-import { UsageMetrics, OptimizationInsight } from './usage-analytics';
-import { BudgetStatus, Alert } from './budget-alerts';
+import { CostOptimizationSuggestion } from './usage-analytics';
+import { BudgetAlert as Alert } from './budget-alerts';
 import { CostBreakdown } from './cost-calculator';
 
 export interface DashboardData {
@@ -19,7 +19,7 @@ export interface DashboardData {
   charts: ChartData[];
   tables: TableData[];
   alerts: Alert[];
-  insights: OptimizationInsight[];
+  insights: CostOptimizationSuggestion[];
   exports: ExportOptions;
 }
 
@@ -824,7 +824,7 @@ export class CostDashboard {
     return [];
   }
 
-  private async getTopInsights(userId: string): Promise<OptimizationInsight[]> {
+  private async getTopInsights(userId: string): Promise<CostOptimizationSuggestion[]> {
     // Would fetch from usage analytics
     return [];
   }

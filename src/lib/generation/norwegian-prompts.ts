@@ -372,15 +372,15 @@ function formatResearchContext(research?: ResearchResult[]): string {
   }
   
   const sections = research.map(r => {
-    const facts = r.keyFacts.slice(0, 3).join('\n- ');
-    const terminology = r.terminology.slice(0, 5).map(t => t.term).join(', ');
+    const insights = r.insights ? r.insights.slice(0, 3).join('\n- ') : 'Ingen innsikter tilgjengelig';
+    const sourceCount = r.sources ? r.sources.length : 0;
     
-    return `KILDE: ${r.source}
-RELEVANS: ${r.relevanceScore}/10
-NØKKELFAKTA:
-- ${facts}
-NORSK TERMINOLOGI: ${terminology}
-KULTURELL KONTEKST: ${r.culturalContext || 'Standard norsk forretningskultur'}`;
+    return `KILDER: ${sourceCount} relevante kilder funnet
+KONFIDENS: ${r.confidence || 0.5}/1.0
+NØKKELINNSIKTER:
+- ${insights}
+SPRÅK: ${r.language === 'no' ? 'Norsk' : 'Engelsk'}
+KULTURELL KONTEKST: ${r.culturalEnhancement ? 'Tilpasset norsk forretningskultur' : 'Standard'}`;
   });
   
   return sections.join('\n\n---\n\n');

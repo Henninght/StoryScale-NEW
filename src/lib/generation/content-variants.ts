@@ -245,7 +245,7 @@ KRAV:
 
 ${request.research ? `
 TILGJENGELIG FORSKNING:
-${request.research.map(r => `- ${r.keyFacts.join(', ')}`).join('\n')}
+${request.research.map(r => `- ${r.insights ? r.insights.join(', ') : 'No insights available'}`).join('\n')}
 ` : ''}
 
 Skriv den utvidede versjonen:`;

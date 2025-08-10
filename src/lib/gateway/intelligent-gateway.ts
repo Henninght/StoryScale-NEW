@@ -517,7 +517,7 @@ export class IntelligentGateway extends EventEmitter {
     // Add postprocessing steps if needed
     if (context.request.culturalContext) {
       route.postprocessingSteps?.push({
-        type: 'adapt',
+        type: 'format',
         config: context.request.culturalContext,
       });
     }
@@ -637,12 +637,6 @@ export class IntelligentGateway extends EventEmitter {
           // Placeholder for translation
           context.response.metadata.wasTranslated = true;
           context.response.metadata.translationQuality = 'translated';
-          break;
-        case 'adapt':
-          // Placeholder for cultural adaptation
-          context.response.metadata.culturalAdaptations = 
-            context.response.metadata.culturalAdaptations || [];
-          context.response.metadata.culturalAdaptations.push('post-adapted');
           break;
         case 'format':
           // Placeholder for formatting

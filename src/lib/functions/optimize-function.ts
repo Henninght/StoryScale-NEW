@@ -115,8 +115,8 @@ export class OptimizeFunction extends EventEmitter {
       contentType: request.type,
       language: request.outputLanguage,
       culturalContext: request.culturalContext,
-      targetAudience: request.targetAudience,
-      tone: request.tone,
+      targetAudience: request.targetAudience || 'general',
+      tone: request.tone || 'professional',
       originalRequest: request,
     };
 
