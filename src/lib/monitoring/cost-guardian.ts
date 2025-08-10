@@ -794,8 +794,11 @@ export class CostGuardian extends EventEmitter {
   private getModelCostPerToken(model: string): number {
     // Default costs per token
     const costs: Record<string, number> = {
+      'gpt-5': 0.00000125,
+      'gpt-5-mini': 0.00000025,
+      'gpt-5-nano': 0.00000005,
+      'gpt-4o': 0.0000025,
       'gpt-4': 0.00003,
-      'gpt-3.5-turbo': 0.000002,
       'claude-3': 0.000015,
       'claude-2': 0.00001,
     };

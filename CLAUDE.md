@@ -77,7 +77,7 @@ EnhanceAgent    // Adds final polish and formatting
 // Multi-provider configuration
 const aiProviders = {
   openai: {
-    models: ['gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'],
+    models: ['gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-4o', 'gpt-4-turbo', 'gpt-4'],
     apiKey: process.env.OPENAI_API_KEY
   },
   anthropic: {
@@ -88,7 +88,7 @@ const aiProviders = {
 }
 
 // User can select model in UI
-const selectedModel = userSettings.preferredModel || 'gpt-4'
+const selectedModel = userSettings.preferredModel || 'gpt-5-mini'
 ```
 
 ### Research Integration
@@ -155,7 +155,7 @@ providers: {
   primary: 'openai',
   fallback: ['anthropic'],
   models: {
-    openai: ['gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'],
+    openai: ['gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-4o', 'gpt-4-turbo', 'gpt-4'],
     anthropic: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']
   },
   research: ['firecrawl', 'tavily']

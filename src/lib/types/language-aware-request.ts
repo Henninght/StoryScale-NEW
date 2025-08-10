@@ -49,7 +49,7 @@ export interface RequestClassification {
   complexity: 'simple' | 'moderate' | 'complex';
   estimatedTokens: number;
   requiredCapabilities: string[];
-  suggestedModel: 'gpt-3.5' | 'gpt-4' | 'claude' | 'specialized';
+  suggestedModel: 'gpt-5-nano' | 'gpt-5-mini' | 'gpt-5' | 'gpt-4o' | 'claude' | 'specialized';
   languageRequirements: {
     inputLang: SupportedLanguage;
     outputLang: SupportedLanguage;

@@ -69,6 +69,36 @@ export interface GenerationResponse {
  * Provider-specific configurations for Norwegian content
  */
 const NORWEGIAN_PROVIDER_CONFIGS: Record<string, AIProviderConfig> = {
+  'gpt-5-norwegian': {
+    provider: 'openai',
+    model: 'gpt-5',
+    temperature: 0.7,
+    maxTokens: 8000,
+    topP: 0.9,
+    frequencyPenalty: 0.3, // Reduce repetition
+    presencePenalty: 0.3,  // Encourage variety
+    norwegianOptimized: true
+  },
+  'gpt-5-mini-norwegian': {
+    provider: 'openai',
+    model: 'gpt-5-mini',
+    temperature: 0.7,
+    maxTokens: 4000,
+    topP: 0.9,
+    frequencyPenalty: 0.3,
+    presencePenalty: 0.3,
+    norwegianOptimized: true
+  },
+  'gpt-4o-norwegian': {
+    provider: 'openai',
+    model: 'gpt-4o',
+    temperature: 0.7,
+    maxTokens: 4000,
+    topP: 0.9,
+    frequencyPenalty: 0.3,
+    presencePenalty: 0.3,
+    norwegianOptimized: true
+  },
   'gpt-4-norwegian': {
     provider: 'openai',
     model: 'gpt-4-turbo-preview',
@@ -77,16 +107,6 @@ const NORWEGIAN_PROVIDER_CONFIGS: Record<string, AIProviderConfig> = {
     topP: 0.9,
     frequencyPenalty: 0.3, // Reduce repetition
     presencePenalty: 0.3,  // Encourage variety
-    norwegianOptimized: true
-  },
-  'gpt-3.5-norwegian': {
-    provider: 'openai',
-    model: 'gpt-3.5-turbo',
-    temperature: 0.7,
-    maxTokens: 2000,
-    topP: 0.9,
-    frequencyPenalty: 0.3,
-    presencePenalty: 0.3,
     norwegianOptimized: true
   },
   'claude-3-norwegian': {
@@ -116,10 +136,12 @@ export class NorwegianAIProvider {
   private costGuardian: CostGuardian;
   private cache: MultiLayerCache;
   private fallbackChain: string[] = [
+    'gpt-5-norwegian',
+    'gpt-5-mini-norwegian',
+    'gpt-4o-norwegian',
     'gpt-4-norwegian',
     'claude-3-norwegian',
-    'claude-3-sonnet-norwegian',
-    'gpt-3.5-norwegian'
+    'claude-3-sonnet-norwegian'
   ];
 
   constructor(
@@ -421,13 +443,13 @@ export class NorwegianAIProvider {
         'claude-3-norwegian',
         'gpt-4-norwegian',
         'claude-3-sonnet-norwegian',
-        'gpt-3.5-norwegian'
+        'gpt-5-mini-norwegian'
       ];
     } else if (request.contentType === 'socialMedia' || request.contentType === 'email') {
       // Prefer GPT for shorter, punchier content
       return [
         'gpt-4-norwegian',
-        'gpt-3.5-norwegian',
+        'gpt-5-mini-norwegian',
         'claude-3-sonnet-norwegian',
         'claude-3-norwegian'
       ];
@@ -502,10 +524,13 @@ export class NorwegianAIProvider {
     const rates: Record<string, { prompt: number; completion: number }> = {
       'gpt-4-turbo-preview': { prompt: 0.01, completion: 0.03 },
       'gpt-4': { prompt: 0.03, completion: 0.06 },
-      'gpt-3.5-turbo': { prompt: 0.0005, completion: 0.0015 }
+      'gpt-5': { prompt: 0.00125, completion: 0.01 },
+      'gpt-5-mini': { prompt: 0.00025, completion: 0.002 },
+      'gpt-5-nano': { prompt: 0.00005, completion: 0.0004 },
+      'gpt-4o': { prompt: 0.0025, completion: 0.01 }
     };
     
-    const rate = rates[model] || rates['gpt-3.5-turbo'];
+    const rate = rates[model] || rates['gpt-5-nano'];
     return (usage.prompt_tokens * rate.prompt + 
             usage.completion_tokens * rate.completion) / 1000;
   }

@@ -37,7 +37,9 @@
       "Bash(touch:*)",
       "Bash(gh run list:*)",
       "Bash(npm run build:*)",
-      "Bash(rsync:*)"
+      "Bash(rsync:*)",
+      "Bash(npx ts-node:*)",
+      "mcp__firecrawl__firecrawl_search"
     ],
     "deny": []
   }

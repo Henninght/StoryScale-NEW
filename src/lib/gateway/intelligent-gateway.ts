@@ -114,8 +114,8 @@ export class IntelligentGateway extends EventEmitter {
         critical: 5.0,
       },
       languageModels: {
-        en: ['gpt-4', 'gpt-3.5-turbo', 'claude-3'],
-        no: ['gpt-4', 'claude-3'], // Norwegian-capable models
+        en: ['gpt-5', 'gpt-5-mini', 'gpt-4o', 'claude-3'],
+        no: ['gpt-5', 'gpt-4o', 'claude-3'], // Norwegian-capable models
       },
       culturalDefaults: {
         no: {
@@ -161,25 +161,58 @@ export class IntelligentGateway extends EventEmitter {
   private initializeModels(): Map<string, ModelCapabilities> {
     const models = new Map<string, ModelCapabilities>();
 
-    // GPT-4 (multi-language support)
+    // GPT-5 (most advanced model)
+    models.set('gpt-5', {
+      id: 'gpt-5',
+      languages: ['en', 'no'],
+      maxTokens: 16384,
+      costPerToken: 0.00000125, // Input cost, output is 8x
+      features: ['advanced-reasoning', 'translation', 'cultural-adaptation', 'code-generation', 'analysis'],
+      priority: 1,
+      endpoint: 'openai',
+    });
+
+    // GPT-5 Mini (balanced performance/cost)
+    models.set('gpt-5-mini', {
+      id: 'gpt-5-mini',
+      languages: ['en', 'no'],
+      maxTokens: 8192,
+      costPerToken: 0.00000025, // 92% performance at 25% cost
+      features: ['complex-reasoning', 'translation', 'cultural-adaptation', 'code-generation'],
+      priority: 2,
+      endpoint: 'openai',
+    });
+
+    // GPT-5 Nano (budget option)
+    models.set('gpt-5-nano', {
+      id: 'gpt-5-nano',
+      languages: ['en', 'no'],
+      maxTokens: 4096,
+      costPerToken: 0.00000005, // Cheapest option
+      features: ['basic-generation', 'simple-translation'],
+      priority: 3,
+      endpoint: 'openai',
+    });
+
+    // GPT-4o (optimized fallback)
+    models.set('gpt-4o', {
+      id: 'gpt-4o',
+      languages: ['en', 'no'],
+      maxTokens: 8192,
+      costPerToken: 0.0000025,
+      features: ['complex-reasoning', 'translation', 'cultural-adaptation'],
+      priority: 4,
+      endpoint: 'openai',
+    });
+
+    // GPT-4 (legacy support)
     models.set('gpt-4', {
       id: 'gpt-4',
       languages: ['en', 'no'],
       maxTokens: 8192,
       costPerToken: 0.00003,
       features: ['complex-reasoning', 'translation', 'cultural-adaptation'],
-      priority: 1,
-      endpoint: 'openai',
-    });
-
-    // GPT-3.5 (basic multi-language)
-    models.set('gpt-3.5-turbo', {
-      id: 'gpt-3.5-turbo',
-      languages: ['en', 'no'],
-      maxTokens: 4096,
-      costPerToken: 0.000002,
-      features: ['basic-generation', 'simple-translation'],
-      priority: 2,
+      priority: 5,
       endpoint: 'openai',
     });
 
@@ -423,13 +456,13 @@ export class IntelligentGateway extends EventEmitter {
     if (complexity === 'complex') requiredCapabilities.push('complex-reasoning');
 
     // Suggest model based on requirements
-    let suggestedModel: 'gpt-3.5' | 'gpt-4' | 'claude' | 'specialized';
+    let suggestedModel: 'gpt-5-nano' | 'gpt-5-mini' | 'gpt-5' | 'gpt-4o' | 'claude' | 'specialized';
     if (complexity === 'simple' && !hasCulturalAdaptation) {
-      suggestedModel = 'gpt-3.5';
+      suggestedModel = 'gpt-5-nano';
     } else if (complexity === 'complex' || hasCulturalAdaptation) {
-      suggestedModel = request.outputLanguage === 'no' ? 'claude' : 'gpt-4';
+      suggestedModel = request.outputLanguage === 'no' ? 'gpt-5' : 'gpt-5';
     } else {
-      suggestedModel = 'gpt-4';
+      suggestedModel = 'gpt-5-mini';
     }
 
     const classification: RequestClassification = {
@@ -524,7 +557,7 @@ export class IntelligentGateway extends EventEmitter {
 
     // Setup fallback route if enabled
     if (this.config.enableFallback && context.request.outputLanguage === 'no') {
-      const fallbackModel = this.models.get('gpt-3.5-turbo');
+      const fallbackModel = this.models.get('gpt-4o');
       if (fallbackModel) {
         route.fallbackRoute = {
           targetModel: fallbackModel.id,

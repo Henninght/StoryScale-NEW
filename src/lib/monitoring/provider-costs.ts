@@ -160,7 +160,115 @@ export class ProviderCostManager {
   private initializeModels(): Map<string, ModelConfig> {
     const models = new Map<string, ModelConfig>();
 
-    // OpenAI Models
+    // OpenAI GPT-5 Models (Latest Generation - August 2025)
+    models.set('gpt-5', {
+      id: 'gpt-5',
+      name: 'GPT-5',
+      provider: 'openai',
+      inputPricing: 0.00125,
+      outputPricing: 0.01,
+      contextWindow: 16384,
+      maxOutput: 8192,
+      capabilities: [
+        'text-generation',
+        'translation',
+        'summarization',
+        'code-generation',
+        'reasoning',
+        'cultural-adaptation',
+        'long-context',
+        'function-calling',
+        'vision',
+        'json-mode',
+      ],
+      languageSupport: {
+        en: 'native',
+        no: 'native',
+      },
+      qualityScore: 0.98,
+      speedScore: 0.90,
+      costEfficiency: 0.85,
+    });
+
+    models.set('gpt-5-mini', {
+      id: 'gpt-5-mini',
+      name: 'GPT-5 Mini',
+      provider: 'openai',
+      inputPricing: 0.00025,
+      outputPricing: 0.002,
+      contextWindow: 8192,
+      maxOutput: 4096,
+      capabilities: [
+        'text-generation',
+        'translation',
+        'summarization',
+        'code-generation',
+        'reasoning',
+        'cultural-adaptation',
+        'function-calling',
+        'json-mode',
+      ],
+      languageSupport: {
+        en: 'native',
+        no: 'native',
+      },
+      qualityScore: 0.92,
+      speedScore: 0.95,
+      costEfficiency: 0.95,
+    });
+
+    models.set('gpt-5-nano', {
+      id: 'gpt-5-nano',
+      name: 'GPT-5 Nano',
+      provider: 'openai',
+      inputPricing: 0.00005,
+      outputPricing: 0.0004,
+      contextWindow: 4096,
+      maxOutput: 2048,
+      capabilities: [
+        'text-generation',
+        'translation',
+        'summarization',
+        'function-calling',
+        'json-mode',
+      ],
+      languageSupport: {
+        en: 'native',
+        no: 'good',
+      },
+      qualityScore: 0.85,
+      speedScore: 0.98,
+      costEfficiency: 0.99,
+    });
+
+    // OpenAI GPT-4 Models (Previous Generation)
+    models.set('gpt-4o', {
+      id: 'gpt-4o',
+      name: 'GPT-4 Optimized',
+      provider: 'openai',
+      inputPricing: 0.0025,
+      outputPricing: 0.01,
+      contextWindow: 8192,
+      maxOutput: 4096,
+      capabilities: [
+        'text-generation',
+        'translation',
+        'summarization',
+        'code-generation',
+        'reasoning',
+        'cultural-adaptation',
+        'function-calling',
+        'json-mode',
+      ],
+      languageSupport: {
+        en: 'native',
+        no: 'good',
+      },
+      qualityScore: 0.94,
+      speedScore: 0.88,
+      costEfficiency: 0.80,
+    });
+
     models.set('gpt-4-turbo', {
       id: 'gpt-4-turbo',
       name: 'GPT-4 Turbo',
@@ -216,29 +324,7 @@ export class ProviderCostManager {
       costEfficiency: 0.5,
     });
 
-    models.set('gpt-3.5-turbo', {
-      id: 'gpt-3.5-turbo',
-      name: 'GPT-3.5 Turbo',
-      provider: 'openai',
-      inputPricing: 0.0005,
-      outputPricing: 0.0015,
-      contextWindow: 16385,
-      maxOutput: 4096,
-      capabilities: [
-        'text-generation',
-        'translation',
-        'summarization',
-        'function-calling',
-        'json-mode',
-      ],
-      languageSupport: {
-        en: 'native',
-        no: 'basic',
-      },
-      qualityScore: 0.75,
-      speedScore: 0.95,
-      costEfficiency: 0.95,
-    });
+    // GPT-3.5 removed - replaced by GPT-5-nano which is cheaper and better
 
     // Anthropic Models
     models.set('claude-3-opus', {

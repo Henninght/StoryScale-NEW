@@ -116,7 +116,48 @@ export class CostCalculator {
   private initializeModelPricing(): Map<string, ModelPricing> {
     const pricing = new Map<string, ModelPricing>();
 
-    // OpenAI Models
+    // OpenAI GPT-5 Models (Latest)
+    pricing.set('gpt-5', {
+      provider: 'openai',
+      model: 'gpt-5',
+      inputCostPer1K: 0.00125,
+      outputCostPer1K: 0.01,
+      contextWindow: 16384,
+      norwegianSupport: 'native',
+      qualityScore: 0.98,
+    });
+
+    pricing.set('gpt-5-mini', {
+      provider: 'openai',
+      model: 'gpt-5-mini',
+      inputCostPer1K: 0.00025,
+      outputCostPer1K: 0.002,
+      contextWindow: 8192,
+      norwegianSupport: 'native',
+      qualityScore: 0.92,
+    });
+
+    pricing.set('gpt-5-nano', {
+      provider: 'openai',
+      model: 'gpt-5-nano',
+      inputCostPer1K: 0.00005,
+      outputCostPer1K: 0.0004,
+      contextWindow: 4096,
+      norwegianSupport: 'native',
+      qualityScore: 0.85,
+    });
+
+    // OpenAI GPT-4 Models (Legacy)
+    pricing.set('gpt-4o', {
+      provider: 'openai',
+      model: 'gpt-4o',
+      inputCostPer1K: 0.0025,
+      outputCostPer1K: 0.01,
+      contextWindow: 8192,
+      norwegianSupport: 'native',
+      qualityScore: 0.94,
+    });
+
     pricing.set('gpt-4', {
       provider: 'openai',
       model: 'gpt-4',
@@ -124,7 +165,7 @@ export class CostCalculator {
       outputCostPer1K: 0.06,
       contextWindow: 8192,
       norwegianSupport: 'native',
-      qualityScore: 0.95,
+      qualityScore: 0.93,
     });
 
     pricing.set('gpt-4-turbo', {
@@ -134,17 +175,7 @@ export class CostCalculator {
       outputCostPer1K: 0.03,
       contextWindow: 128000,
       norwegianSupport: 'native',
-      qualityScore: 0.93,
-    });
-
-    pricing.set('gpt-3.5-turbo', {
-      provider: 'openai',
-      model: 'gpt-3.5-turbo',
-      inputCostPer1K: 0.0005,
-      outputCostPer1K: 0.0015,
-      contextWindow: 16385,
-      norwegianSupport: 'translated',
-      qualityScore: 0.75,
+      qualityScore: 0.92,
     });
 
     // Anthropic Models
@@ -178,9 +209,10 @@ export class CostCalculator {
       qualityScore: 0.70,
     });
 
-    // Simplified naming
-    pricing.set('gpt-4', pricing.get('gpt-4')!);
-    pricing.set('gpt-3.5', pricing.get('gpt-3.5-turbo')!);
+    // Simplified naming and aliases
+    pricing.set('gpt-5-norwegian', pricing.get('gpt-5')!);
+    pricing.set('gpt-5-mini-norwegian', pricing.get('gpt-5-mini')!);
+    pricing.set('gpt-4o-norwegian', pricing.get('gpt-4o')!);
     pricing.set('claude-3', pricing.get('claude-3-sonnet')!);
     pricing.set('claude', pricing.get('claude-3-sonnet')!);
 
@@ -444,8 +476,8 @@ export class CostCalculator {
       }
     }
 
-    // Default to GPT-3.5 pricing if not found
-    return pricing || this.modelPricing.get('gpt-3.5-turbo')!;
+    // Default to GPT-5-nano pricing if not found (cheapest option)
+    return pricing || this.modelPricing.get('gpt-5-nano')!;
   }
 
   /**
