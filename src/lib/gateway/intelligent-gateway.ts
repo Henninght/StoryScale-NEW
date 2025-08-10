@@ -690,6 +690,15 @@ export class IntelligentGateway extends EventEmitter {
       return context;
     }
 
+    // Store in optimizer for multi-layer caching with performance tracking
+    const generationTime = Date.now() - context.startTime;
+    await this.cacheOptimizer.set(
+      context.request,
+      context.response,
+      generationTime
+    );
+
+    // Also store in simple cache for backward compatibility
     const cacheEntry: CacheEntry = {
       key: cacheKey,
       request: context.request,
