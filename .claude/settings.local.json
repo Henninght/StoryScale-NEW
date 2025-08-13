@@ -49,7 +49,10 @@
       "mcp__playwright__browser_take_screenshot",
       "Bash(node:*)",
       "Bash(npx playwright install:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "mcp__supabase__list_projects",
+      "Bash(supabase start:*)",
+      "mcp__playwright__browser_close"
     ],
     "deny": []
   }

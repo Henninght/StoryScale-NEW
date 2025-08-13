@@ -45,6 +45,36 @@ Keep it light but valuable.`
       intro: "Tell a compelling story about",
       structure: "Setup → Challenge → Action → Result → Lesson",
       emphasis: "Make it personal and relatable with a clear moral"
+    },
+    
+    'thought-leadership': {
+      intro: "Share expert insights and thought leadership about",
+      structure: "Hook → Expert Context → Core Insight → Supporting Analysis → Forward-Looking Takeaway",
+      emphasis: "Demonstrate deep expertise and unique perspective"
+    },
+    
+    'promote-content': {
+      intro: "Introduce and promote content about",
+      structure: "Value Hook → Content Preview → Key Benefits → Clear CTA",
+      emphasis: "Lead with value, not promotion"
+    },
+    
+    'value': {
+      intro: "Share valuable insights about",
+      structure: "Problem → Solution → Benefits → Action",
+      emphasis: "Focus on practical value and actionable advice"
+    },
+    
+    'question': {
+      intro: "Pose a thought-provoking question about",
+      structure: "Context → Question → Your Perspective → Invite Discussion",
+      emphasis: "Make it genuinely engaging, not rhetorical"
+    },
+    
+    'authority': {
+      intro: "Establish thought leadership about",
+      structure: "Expert Hook → Industry Context → Authoritative Insight → Future Implications",
+      emphasis: "Demonstrate expertise and industry knowledge"
     }
   },
 
@@ -66,6 +96,12 @@ Keep it light but valuable.`
       vocabulary: "growth, pivot, bootstrap, scale, innovation",
       focus: "lessons learned, growth strategies, overcoming challenges",
       length: "story-driven with specific examples"
+    },
+    
+    'general-business': {
+      vocabulary: "business, professional, industry, success, growth",
+      focus: "broad business applications, general insights, universal principles",
+      length: "accessible and widely applicable"
     }
   },
 
@@ -87,7 +123,22 @@ End with a forward-looking statement.`,
     'tips': `Start with the problem you're solving.
 Provide 3-5 actionable tips.
 Include specific how-to details.
-Close with encouragement to try.`
+Close with encouragement to try.`,
+    
+    'modern': `Use emojis and trending language.
+Create visual breaks with spacing.
+Include a strong hook and relatable content.
+Keep it fresh and engaging.`,
+    
+    'news': `Lead with the headline or announcement.
+Provide context and background.
+Explain the impact and implications.
+Include next steps or what to watch.`,
+    
+    'howto': `Start with what you'll learn/achieve.
+Break into numbered steps.
+Include specific details and examples.
+End with encouragement to try.`
   },
 
   // Call-to-action templates
@@ -115,10 +166,13 @@ export function buildLinkedInPrompt(params) {
   const {
     topic,
     purpose = 'share-insights',
+    goal = 'increase-engagement',
     tone = 'professional',
     audience = 'professionals',
     format = 'insight',
     enableCTA = true,
+    callToAction = '',
+    url = '',
     keywords = [],
     customInstructions = ''
   } = params;
@@ -134,6 +188,7 @@ export function buildLinkedInPrompt(params) {
 ${systemPrompt}
 
 Your task: ${purposeGuide.intro} ${topic}
+Goal: ${goal.replace('-', ' ')} (focus on this objective)
 
 Audience Profile:
 - Target: ${audience}
@@ -150,7 +205,8 @@ Key Requirements:
 - Include these keywords naturally: ${keywords.join(', ') || 'none specified'}
 - Length: 200-300 words
 - Add 3-5 relevant hashtags
-${enableCTA ? '- End with an engaging call-to-action' : ''}
+${url ? `- Reference this URL if relevant: ${url}` : ''}
+${enableCTA && callToAction ? `- End with this call-to-action: "${callToAction}"` : enableCTA ? '- End with an engaging call-to-action' : ''}
 
 ${customInstructions ? `Special Instructions: ${customInstructions}` : ''}
 

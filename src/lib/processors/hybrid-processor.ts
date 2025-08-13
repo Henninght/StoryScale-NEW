@@ -253,14 +253,17 @@ export class HybridProcessor extends EventEmitter {
       // Import and use custom prompts
       const { buildLinkedInPrompt } = await import('../prompts/linkedin-prompts.js');
       
-      // Build prompts using the template system
+      // Build prompts using the template system with all wizard data
       const promptConfig = buildLinkedInPrompt({
         topic: request.topic,
         purpose: request.purpose || 'share-insights',
+        goal: request.goal || 'increase-engagement',
         tone: request.tone || 'professional',
         audience: request.targetAudience || 'professionals',
         format: request.format || 'insight',
-        enableCTA: true,
+        enableCTA: !!request.callToAction,
+        callToAction: request.callToAction,
+        url: request.url,
         keywords: request.keywords || [],
         customInstructions: request.customInstructions || ''
       });
@@ -269,7 +272,7 @@ export class HybridProcessor extends EventEmitter {
       const userPrompt = promptConfig.user;
 
       // Choose AI provider based on configuration or request
-      const aiProvider = request.aiProvider || process.env.AI_PROVIDER || 'anthropic'; // Default to Claude
+      const aiProvider = request.aiProvider || 'anthropic'; // Default to Claude Sonnet 4
       let content = '';
 
       if (aiProvider === 'anthropic' || aiProvider === 'claude') {
@@ -280,7 +283,7 @@ export class HybridProcessor extends EventEmitter {
         });
 
         const completion = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514', // Claude Sonnet 4 (latest)
+          model: 'claude-3-5-sonnet-20241022', // Latest Claude Sonnet 3.5
           max_tokens: 1000,
           temperature: 0.7,
           system: systemPrompt,
@@ -304,7 +307,7 @@ export class HybridProcessor extends EventEmitter {
         });
 
         const completion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
+          model: 'gpt-5', // Use GPT-5 when OpenAI is selected
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
@@ -314,7 +317,7 @@ export class HybridProcessor extends EventEmitter {
         });
 
         content = completion.choices[0]?.message?.content || 'Failed to generate content';
-        console.log('Generated content using OpenAI GPT-4o-mini');
+        console.log('Generated content using OpenAI GPT-5');
       }
 
       return {
@@ -873,13 +876,13 @@ export class HybridProcessor extends EventEmitter {
       
       // Rollout control
       new_architecture_percentage: 100, // Use new architecture for everyone
-      fallback_enabled: true,
+      fallback_enabled: false, // Disable legacy fallback to force new architecture
       canary_users: [],
       
       // Quality gates
       quality_threshold: 0.7,
-      enable_quality_gates: true,
-      enable_auto_fallback: true,
+      enable_quality_gates: false, // Disable quality gates to prevent fallback
+      enable_auto_fallback: false, // Disable auto fallback
     };
   }
 

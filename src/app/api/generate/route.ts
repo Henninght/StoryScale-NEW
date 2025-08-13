@@ -62,11 +62,14 @@ export const POST = securePostHandler(async (request: NextRequest) => {
       }
     }
     
-    // Build content request - map to correct interface
+    // Build content request - pass all wizard data
     const contentRequest: LanguageAwareContentRequest = {
       id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      type: (body.type === 'linkedin-post' ? 'social' : body.type) || 'social', // Map linkedin-post to social
+      type: body.type || 'linkedin-post', // Keep original type
       topic: body.content || 'No topic provided',
+      purpose: body.purpose, // Pass wizard purpose
+      goal: body.goal, // Pass wizard goal
+      format: body.format, // Pass wizard format
       keywords: body.keywords,
       tone: body.tone || 'professional',
       targetAudience: body.targetAudience || 'business professionals',
@@ -77,6 +80,9 @@ export const POST = securePostHandler(async (request: NextRequest) => {
       culturalContext: body.culturalContext,
       requiresTranslation: false,
       enableResearch: body.enableResearch || false,
+      callToAction: body.callToAction, // Pass call-to-action
+      url: body.url, // Pass URL if provided
+      aiProvider: 'anthropic', // Default to Claude Sonnet 4
       glossary: body.glossary,
       seoRequirements: body.seoRequirements
     }
@@ -90,15 +96,20 @@ export const POST = securePostHandler(async (request: NextRequest) => {
     })
     console.log('Generate API: Processor returned result')
     
-    // Return successful response with hybrid processor result
+    // Return successful response in format expected by wizard store
     return NextResponse.json({
       success: result.success,
+      id: contentRequest.id,
       content: result.content,
+      generatedAt: new Date().toISOString(),
+      modelUsed: 'claude-3-5-sonnet-20241022',
+      tokensUsed: 1000, // Estimated
+      processingTime: result.processing_time,
+      researchSources: [], // Empty for now
       data: result,
       architecture: '3-layer-function-based',
       version: '2.0.0',
       strategy_used: result.strategy_used,
-      processing_time: result.processing_time,
       quality_score: result.metadata.quality_score,
       functions_executed: result.new_architecture_result?.metadata?.functionsExecuted || [],
       feature_flags: result.metadata.feature_flags_applied
