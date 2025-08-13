@@ -24,17 +24,22 @@ const securePostHandler = withSecurity({
 
 export const POST = securePostHandler(async (request: NextRequest) => {
   try {
+    console.log('Generate API: Request received')
+    
     // Parse request body
     const body = await request.json()
+    console.log('Generate API: Body parsed:', JSON.stringify(body, null, 2))
     
     // Validate required fields
     const validation = validateRequest(body)
     if (!validation.valid) {
+      console.log('Generate API: Validation failed:', validation.errors)
       return NextResponse.json(
         { error: 'Validation failed', details: validation.errors },
         { status: 400 }
       )
     }
+    console.log('Generate API: Validation passed')
 
     // Additional security validation for research requests
     if (body.enableResearch) {
@@ -77,11 +82,13 @@ export const POST = securePostHandler(async (request: NextRequest) => {
     }
     
     // Process through hybrid processor with new architecture
+    console.log('Generate API: Calling processor with request:', JSON.stringify(contentRequest, null, 2))
     const result = await processor.process(contentRequest, {
       userId: body.userId,
       enableComparison: body.enableComparison || false,
       customFeatureFlags: body.featureFlags
     })
+    console.log('Generate API: Processor returned result')
     
     // Return successful response with hybrid processor result
     return NextResponse.json({
@@ -99,6 +106,7 @@ export const POST = securePostHandler(async (request: NextRequest) => {
     
   } catch (error) {
     console.error('Generation API error:', error)
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')
     
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     
@@ -106,6 +114,10 @@ export const POST = securePostHandler(async (request: NextRequest) => {
       { 
         error: 'Generation failed', 
         message: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? {
+          errorType: error?.constructor?.name,
+          stack: error instanceof Error ? error.stack : undefined
+        } : undefined,
         architecture: '3-layer-function-based'
       },
       { status: 500 }

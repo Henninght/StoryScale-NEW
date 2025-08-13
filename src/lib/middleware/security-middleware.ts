@@ -91,16 +91,28 @@ class SecurityMiddleware {
         return this.createErrorResponse(413, 'Payload Too Large', securityHeaders);
       }
 
-      // 6. Content validation
-      if (this.config.enableRequestValidation) {
+      // 6. Content validation and body parsing
+      let parsedBody: any = null;
+      if (this.config.enableRequestValidation && request.method !== 'GET' && request.method !== 'HEAD') {
         const contentCheck = await this.validateRequestContent(request);
         if (!contentCheck.allowed) {
           return this.createErrorResponse(400, `Invalid request: ${contentCheck.reason}`, securityHeaders);
         }
+        parsedBody = contentCheck.body;
       }
 
-      // 7. Execute the handler
-      const response = await handler(request);
+      // 7. Execute the handler with parsed body if available
+      // Clone request with body if it was parsed
+      let requestToPass = request;
+      if (parsedBody) {
+        // Create a new request with the parsed body
+        requestToPass = new NextRequest(request.url, {
+          method: request.method,
+          headers: request.headers,
+          body: JSON.stringify(parsedBody),
+        });
+      }
+      const response = await handler(requestToPass);
 
       // 8. Add security headers to response
       Object.entries(securityHeaders).forEach(([key, value]) => {
@@ -233,6 +245,7 @@ class SecurityMiddleware {
   private async validateRequestContent(request: NextRequest): Promise<{ 
     allowed: boolean; 
     reason?: string;
+    body?: any;
   }> {
     if (request.method === 'GET' || request.method === 'HEAD') {
       return { allowed: true };
@@ -249,12 +262,23 @@ class SecurityMiddleware {
         };
       }
 
-      // Basic JSON validation (don't parse the full body to avoid memory issues)
-      const body = await request.text();
-      if (body.trim() && !body.trim().startsWith('{') && !body.trim().startsWith('[')) {
+      // Basic JSON validation and parse the body
+      const bodyText = await request.text();
+      if (bodyText.trim() && !bodyText.trim().startsWith('{') && !bodyText.trim().startsWith('[')) {
         return { 
           allowed: false, 
           reason: 'Invalid JSON format' 
+        };
+      }
+
+      // Parse JSON
+      let parsedBody: any;
+      try {
+        parsedBody = JSON.parse(bodyText);
+      } catch (e) {
+        return {
+          allowed: false,
+          reason: 'Invalid JSON syntax'
         };
       }
 
@@ -269,7 +293,7 @@ class SecurityMiddleware {
       ];
 
       for (const pattern of suspiciousPatterns) {
-        if (pattern.test(body)) {
+        if (pattern.test(bodyText)) {
           console.warn(`Suspicious content detected in request from ${this.getClientIP(request)}`);
           return { 
             allowed: false, 
@@ -278,7 +302,7 @@ class SecurityMiddleware {
         }
       }
 
-      return { allowed: true };
+      return { allowed: true, body: parsedBody };
 
     } catch (error) {
       return { 

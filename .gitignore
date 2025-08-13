@@ -53,3 +53,4 @@ pids
 
 # Supabase
 .supabase
+.env.local

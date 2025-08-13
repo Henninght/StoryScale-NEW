@@ -605,9 +605,53 @@ export class IntelligentGateway extends EventEmitter {
       });
       generatedContent = result.content;
     } else {
-      // Use real AI service when configured
-      // This will be implemented when API keys are provided
-      generatedContent = `[Generated content for: ${context.request.topic} in ${context.request.outputLanguage}]`;
+      // Use real AI service with OpenAI
+      try {
+        const OpenAI = (await import('openai')).default;
+        const openai = new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY
+        });
+
+        // Create a proper prompt based on the request
+        const systemPrompt = `You are a professional content writer creating high-quality ${context.request.type} content.
+Language: ${context.request.outputLanguage}
+Tone: ${context.request.tone || 'professional'}
+Target Audience: ${context.request.targetAudience || 'general business'}`;
+
+        const userPrompt = `Create a compelling ${context.request.type} about: ${context.request.topic}
+
+Requirements:
+- Write in ${context.request.outputLanguage === 'no' ? 'Norwegian' : 'English'}
+- Maintain a ${context.request.tone || 'professional'} tone
+- Target audience: ${context.request.targetAudience || 'business professionals'}
+- Length: ${context.request.wordCount || 500} words
+${context.request.keywords ? `- Include keywords: ${context.request.keywords.join(', ')}` : ''}
+${context.request.seoRequirements ? `- SEO focus: ${JSON.stringify(context.request.seoRequirements)}` : ''}
+
+Please write engaging, high-quality content that resonates with the target audience.`;
+
+        const completion = await openai.chat.completions.create({
+          model: context.route?.targetModel || 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 2000
+        });
+
+        generatedContent = completion.choices[0]?.message?.content || 'Content generation failed';
+        
+        // Update token usage
+        if (completion.usage) {
+          context.costs.tokens = completion.usage.total_tokens;
+          context.costs.amount = (completion.usage.total_tokens * 0.000002); // Approximate cost
+        }
+      } catch (error) {
+        console.error('AI generation error:', error);
+        // Fallback to a simple template
+        generatedContent = `Error generating content: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      }
     }
 
     context.response = {

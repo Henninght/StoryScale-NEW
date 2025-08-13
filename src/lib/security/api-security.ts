@@ -294,6 +294,10 @@ export class APISecurityManager extends EventEmitter {
    */
 
   private initializeCredentials(): void {
+    // Only show warnings in development mode and not during build
+    const isBuilding = process.env.NODE_ENV === 'production' && !process.env.VERCEL_URL;
+    const shouldWarn = process.env.NODE_ENV === 'development' && !isBuilding;
+
     // Firecrawl credentials
     const firecrawlKey = process.env.FIRECRAWL_API_KEY;
     if (firecrawlKey && this.validateApiKey(firecrawlKey)) {
@@ -303,7 +307,7 @@ export class APISecurityManager extends EventEmitter {
         lastRotated: new Date(),
         isValid: true
       });
-    } else {
+    } else if (shouldWarn) {
       console.warn('Invalid or missing Firecrawl API key');
     }
 
@@ -316,7 +320,7 @@ export class APISecurityManager extends EventEmitter {
         lastRotated: new Date(),
         isValid: true
       });
-    } else {
+    } else if (shouldWarn) {
       console.warn('Invalid or missing Tavily API key');
     }
   }
