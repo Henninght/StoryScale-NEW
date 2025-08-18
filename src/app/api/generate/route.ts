@@ -24,22 +24,22 @@ const securePostHandler = withSecurity({
 
 export const POST = securePostHandler(async (request: NextRequest) => {
   try {
-    console.log('Generate API: Request received')
+    console.log('🚀 Generate API: Request received')
     
     // Parse request body
     const body = await request.json()
-    console.log('Generate API: Body parsed:', JSON.stringify(body, null, 2))
+    console.log('🚀 Generate API: Body parsed:', JSON.stringify(body, null, 2))
     
     // Validate required fields
     const validation = validateRequest(body)
     if (!validation.valid) {
-      console.log('Generate API: Validation failed:', validation.errors)
+      console.log('❌ Generate API: Validation failed:', validation.errors)
       return NextResponse.json(
         { error: 'Validation failed', details: validation.errors },
         { status: 400 }
       )
     }
-    console.log('Generate API: Validation passed')
+    console.log('✅ Generate API: Validation passed')
 
     // Additional security validation for research requests
     if (body.enableResearch) {
@@ -70,6 +70,7 @@ export const POST = securePostHandler(async (request: NextRequest) => {
       purpose: body.purpose, // Pass wizard purpose
       goal: body.goal, // Pass wizard goal
       format: body.format, // Pass wizard format
+      postLength: body.postLength || 'medium', // Pass wizard post length
       keywords: body.keywords,
       tone: body.tone || 'professional',
       targetAudience: body.targetAudience || 'business professionals',
@@ -88,16 +89,19 @@ export const POST = securePostHandler(async (request: NextRequest) => {
     }
     
     // Process through hybrid processor with new architecture
-    console.log('Generate API: Calling processor with request:', JSON.stringify(contentRequest, null, 2))
+    console.log('🔄 Generate API: Calling processor with request:', JSON.stringify(contentRequest, null, 2))
     const result = await processor.process(contentRequest, {
       userId: body.userId,
       enableComparison: body.enableComparison || false,
       customFeatureFlags: body.featureFlags
     })
-    console.log('Generate API: Processor returned result')
+    console.log('✅ Generate API: Processor returned result')
+    console.log('🔄 Generate API: Result success:', result.success)
+    console.log('🔄 Generate API: Result content length:', result.content?.length || 0)
+    console.log('🔄 Generate API: Result content preview:', result.content?.substring(0, 100) + '...')
     
     // Return successful response in format expected by wizard store
-    return NextResponse.json({
+    const response = {
       success: result.success,
       id: contentRequest.id,
       content: result.content,
@@ -113,7 +117,10 @@ export const POST = securePostHandler(async (request: NextRequest) => {
       quality_score: result.metadata.quality_score,
       functions_executed: result.new_architecture_result?.metadata?.functionsExecuted || [],
       feature_flags: result.metadata.feature_flags_applied
-    })
+    }
+    
+    console.log('📤 Generate API: Returning response:', JSON.stringify(response, null, 2))
+    return NextResponse.json(response)
     
   } catch (error) {
     console.error('Generation API error:', error)
@@ -194,8 +201,9 @@ function validateRequest(body: unknown): { valid: boolean; errors: string[] } {
   }
   
   // Optional field validation
-  if (typedBody.purpose && !['thought-leadership', 'question', 'value', 'authority'].includes(typedBody.purpose as string)) {
-    errors.push('purpose must be one of: thought-leadership, question, value, authority')
+  // Allow both wizard purposes and API purposes (mapped by wizard store)
+  if (typedBody.purpose && !['thought-leadership', 'question', 'value', 'authority', 'lead-generation', 'lead-nurture', 'lead-qualification', 'lead-magnet'].includes(typedBody.purpose as string)) {
+    errors.push('purpose must be one of: thought-leadership, question, value, authority, lead-generation, lead-nurture, lead-qualification, lead-magnet')
   }
   
   if (typedBody.format && !['story', 'insight', 'list', 'howto', 'question'].includes(typedBody.format as string)) {

@@ -7,7 +7,7 @@
 
 import React, { useEffect } from 'react'
 import { useWizardStore } from '@/stores/wizard-store'
-import { TargetAudience, ContentTone, ContentFormat } from '@/types/wizard'
+import { TargetAudience, ContentTone, ContentFormat, PostLength } from '@/types/wizard'
 import { cn } from '@/lib/utils'
 
 // Audience options with icons and descriptions
@@ -128,12 +128,52 @@ const formatOptions: Array<{
   }
 ]
 
+// Post length options with character counts and usage guidance
+const postLengthOptions: Array<{
+  value: PostLength
+  label: string
+  description: string
+  characterRange: string
+  icon: string
+  usage: string
+  example: string
+}> = [
+  {
+    value: 'short',
+    label: 'Short Post',
+    description: '300-800 characters',
+    characterRange: '300-800',
+    icon: '⚡',
+    usage: 'Quick insights, announcements, or simple updates',
+    example: 'Perfect for daily tips, quick thoughts, or breaking news'
+  },
+  {
+    value: 'medium',
+    label: 'Medium Post',
+    description: '800-1,500 characters',
+    characterRange: '800-1,500',
+    icon: '📝',
+    usage: 'Detailed stories, case studies, or comprehensive tips',
+    example: 'Ideal for sharing experiences, lessons learned, or step-by-step guides'
+  },
+  {
+    value: 'long',
+    label: 'Long Post',
+    description: '1,500-3,000 characters',
+    characterRange: '1,500-3,000',
+    icon: '📚',
+    usage: 'In-depth analysis, thought leadership, or comprehensive guides',
+    example: 'Best for detailed insights, industry analysis, or comprehensive tutorials'
+  }
+]
+
 export function Step2AudienceStyle() {
   const {
     data,
     setTargetAudience,
     setContentTone,
     setContentFormat,
+    setPostLength,
     validateCurrentStep
   } = useWizardStore()
 
@@ -159,6 +199,10 @@ export function Step2AudienceStyle() {
 
   const handleFormatSelect = (format: ContentFormat) => {
     setContentFormat(format)
+  }
+
+  const handlePostLengthSelect = (postLength: PostLength) => {
+    setPostLength(postLength)
   }
 
   const validation = validateCurrentStep()
@@ -316,8 +360,74 @@ export function Step2AudienceStyle() {
         </div>
       </div>
 
+      {/* Post Length Selection */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-3">
+          Choose post length <span className="text-red-500">*</span>
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {postLengthOptions.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => handlePostLengthSelect(option.value)}
+              className={cn(
+                "relative p-4 rounded-lg border-2 transition-all duration-200",
+                "hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+                "text-left h-full",
+                data.step2.postLength === option.value
+                  ? "border-blue-500 bg-blue-50"
+                  : "border-gray-200 bg-white hover:border-gray-300"
+              )}
+            >
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <span className="text-2xl">{option.icon}</span>
+                  <div>
+                    <h4 className={cn(
+                      "font-medium",
+                      data.step2.postLength === option.value ? "text-blue-900" : "text-gray-900"
+                    )}>
+                      {option.label}
+                    </h4>
+                    <p className={cn(
+                      "text-sm font-medium",
+                      data.step2.postLength === option.value ? "text-blue-700" : "text-gray-600"
+                    )}>
+                      {option.description}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <p className={cn(
+                    "text-xs",
+                    data.step2.postLength === option.value ? "text-blue-600" : "text-gray-500"
+                  )}>
+                    <strong>Best for:</strong> {option.usage}
+                  </p>
+                  <p className={cn(
+                    "text-xs italic",
+                    data.step2.postLength === option.value ? "text-blue-600" : "text-gray-500"
+                  )}>
+                    {option.example}
+                  </p>
+                </div>
+              </div>
+              
+              {data.step2.postLength === option.value && (
+                <div className="absolute top-2 right-2">
+                  <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Selection Summary */}
-      {data.step2.audience && data.step2.tone && data.step2.format && (
+      {data.step2.audience && data.step2.tone && data.step2.format && data.step2.postLength && (
         <div className="bg-gray-50 rounded-lg p-4">
           <h4 className="text-sm font-medium text-gray-700 mb-2">Your selections:</h4>
           <div className="flex flex-wrap gap-2">
@@ -329,6 +439,9 @@ export function Step2AudienceStyle() {
             </span>
             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
               {formatOptions.find(f => f.value === data.step2.format)?.icon} {data.step2.format}
+            </span>
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+              {postLengthOptions.find(l => l.value === data.step2.postLength)?.icon} {data.step2.postLength} ({postLengthOptions.find(l => l.value === data.step2.postLength)?.characterRange} chars)
             </span>
           </div>
         </div>

@@ -13,6 +13,7 @@ import {
   TargetAudience,
   ContentTone,
   ContentFormat,
+  PostLength,
   SmartDefaults,
   StepValidation,
   GeneratedContent
@@ -38,6 +39,7 @@ interface WizardState {
   setTargetAudience: (audience: TargetAudience | '') => void
   setContentTone: (tone: ContentTone | '') => void
   setContentFormat: (format: ContentFormat | '') => void
+  setPostLength: (postLength: PostLength | '') => void
 
   // Actions - Step 3
   setLanguage: (language: SupportedLanguage) => void
@@ -69,6 +71,8 @@ interface WizardState {
   applySmartDefaults: () => void
   getCompletionPercentage: () => number
   isStepCompleted: (step: number) => boolean
+  validateStateIntegrity: () => boolean
+  debugStateConsistency: () => void
 }
 
 // Initial state factory
@@ -82,7 +86,8 @@ const createInitialData = (): WizardData => ({
   step2: {
     audience: '',
     tone: '',
-    format: ''
+    format: '',
+    postLength: ''
   },
   step3: {
     language: 'en',
@@ -109,6 +114,7 @@ const createSmartDefaults = (): SmartDefaults => ({
   audience: 'professionals',
   tone: 'professional',
   format: 'modern',
+  postLength: 'medium',
   language: 'en',
   enableResearch: false
 })
@@ -125,38 +131,58 @@ export const useWizardStore = create<WizardState>()(
         isGenerating: false,
         error: null,
 
-        // Step 1 Actions
+        // Step 1 Actions - Improved state isolation and atomic updates
         setContentDescription: (description) =>
-          set((state) => ({
-            data: {
-              ...state.data,
-              step1: { ...state.data.step1, description }
+          set((state) => {
+            console.log('🔄 Store: Setting description:', description)
+            return {
+              ...state,
+              data: {
+                ...state.data,
+                step1: { ...state.data.step1, description }
+              },
+              error: null // Clear any previous errors
             }
-          })),
+          }),
 
         setContentPurpose: (purpose) =>
-          set((state) => ({
-            data: {
-              ...state.data,
-              step1: { ...state.data.step1, purpose }
+          set((state) => {
+            console.log('🔄 Store: Setting purpose:', purpose, 'Current goal:', state.data.step1.goal)
+            return {
+              ...state,
+              data: {
+                ...state.data,
+                step1: { ...state.data.step1, purpose }
+              },
+              error: null
             }
-          })),
+          }),
 
         setContentGoal: (goal) =>
-          set((state) => ({
-            data: {
-              ...state.data,
-              step1: { ...state.data.step1, goal }
+          set((state) => {
+            console.log('🔄 Store: Setting goal:', goal, 'Current purpose:', state.data.step1.purpose)
+            return {
+              ...state,
+              data: {
+                ...state.data,
+                step1: { ...state.data.step1, goal }
+              },
+              error: null
             }
-          })),
+          }),
 
         setContentUrl: (url) =>
-          set((state) => ({
-            data: {
-              ...state.data,
-              step1: { ...state.data.step1, url }
+          set((state) => {
+            console.log('🔄 Store: Setting URL:', url)
+            return {
+              ...state,
+              data: {
+                ...state.data,
+                step1: { ...state.data.step1, url }
+              },
+              error: null
             }
-          })),
+          }),
 
         // Step 2 Actions
         setTargetAudience: (audience) =>
@@ -180,6 +206,14 @@ export const useWizardStore = create<WizardState>()(
             data: {
               ...state.data,
               step2: { ...state.data.step2, format }
+            }
+          })),
+
+        setPostLength: (postLength) =>
+          set((state) => ({
+            data: {
+              ...state.data,
+              step2: { ...state.data.step2, postLength }
             }
           })),
 
@@ -304,6 +338,9 @@ export const useWizardStore = create<WizardState>()(
               if (!state.data.step2.format) {
                 errors.push('Please select a content format')
               }
+              if (!state.data.step2.postLength) {
+                errors.push('Please select a post length')
+              }
               canAutoAdvance = errors.length === 0
               break
 
@@ -343,25 +380,55 @@ export const useWizardStore = create<WizardState>()(
         generateContent: async () => {
           const state = get()
           
+          console.log('🎯 Wizard Store: Starting content generation')
+          console.log('🎯 Wizard Store: Current data:', JSON.stringify(state.data, null, 2))
+          
+          // Migration: Add default postLength if missing
+          if (!state.data.step2.postLength) {
+            console.log('🔄 Wizard Store: Adding default postLength for migration')
+            state.setPostLength('medium')
+          }
+          
           // Validate all steps
           for (let i = 1; i <= 4; i++) {
             const validation = state.validateStep(i)
+            console.log(`🎯 Wizard Store: Step ${i} validation:`, validation)
             if (!validation.isValid) {
+              console.log(`❌ Wizard Store: Step ${i} validation failed:`, validation.errors)
               set({ error: `Step ${i} validation failed: ${validation.errors.join(', ')}` })
               return
             }
           }
 
           set({ isGenerating: true, error: null })
+          console.log('🎯 Wizard Store: Starting API call...')
+          
+          // Track generation start time
+          const startTime = Date.now()
 
-          // Map wizard values to API-expected values
-          const mapPurposeToAPI = (purpose: string): string => {
+          // Map wizard values to API-expected values with lead generation intelligence
+          const mapPurposeToAPI = (purpose: string, goal: string): string => {
+            // Lead generation overrides based on purpose combination
+            if (goal === 'generate-leads') {
+              const leadGenMapping: Record<string, string> = {
+                'share-insights': 'lead-generation',      // Direct lead capture
+                'offer-value': 'lead-magnet',             // Value exchange approach
+                'ask-question': 'lead-qualification',     // Qualify through questions
+                'share-story': 'lead-nurture',           // Nurture through storytelling
+                'provide-solutions': 'lead-generation',   // Solution-based lead capture
+                'celebrate-success': 'lead-nurture'      // Soft sell through success
+              }
+              return leadGenMapping[purpose] || 'lead-generation'
+            }
+
+            // Original mapping for non-lead-gen goals
             const mapping: Record<string, string> = {
               'share-insights': 'thought-leadership',
-              'announce-news': 'value',
+              'offer-value': 'value',                    // Value exchange as value content
               'ask-question': 'question',
               'share-story': 'value',
-              'promote-content': 'authority'
+              'provide-solutions': 'thought-leadership', // Solutions as thought leadership
+              'celebrate-success': 'value'               // Success stories as value
             }
             return mapping[purpose] || purpose
           }
@@ -378,42 +445,93 @@ export const useWizardStore = create<WizardState>()(
 
           try {
             // Call the generate API endpoint with mapped values
+            const requestBody = {
+              type: 'linkedin-post',
+              content: state.data.step1.description,
+              purpose: mapPurposeToAPI(state.data.step1.purpose, state.data.step1.goal),
+              goal: state.data.step1.goal,
+              targetAudience: state.data.step2.audience,
+              tone: state.data.step2.tone,
+              format: mapFormatToAPI(state.data.step2.format),
+              postLength: state.data.step2.postLength,
+              language: state.data.step3.language,
+              enableResearch: state.data.step3.enableResearch,
+              researchDepth: state.data.step3.researchDepth,
+              callToAction: state.data.step4.callToAction,
+              url: state.data.step1.url
+            }
+            
+            console.log('🎯 Wizard Store: API Request Body:', JSON.stringify(requestBody, null, 2))
+            
             const response = await fetch('/api/generate', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                type: 'linkedin-post',
-                content: state.data.step1.description,
-                purpose: mapPurposeToAPI(state.data.step1.purpose),
-                goal: state.data.step1.goal,
-                targetAudience: state.data.step2.audience,
-                tone: state.data.step2.tone,
-                format: mapFormatToAPI(state.data.step2.format),
-                language: state.data.step3.language,
-                enableResearch: state.data.step3.enableResearch,
-                researchDepth: state.data.step3.researchDepth,
-                callToAction: state.data.step4.callToAction,
-                url: state.data.step1.url
-              })
+              body: JSON.stringify(requestBody)
             })
 
+            console.log('🎯 Wizard Store: API Response Status:', response.status)
+            console.log('🎯 Wizard Store: API Response OK:', response.ok)
+
             if (!response.ok) {
-              throw new Error(`Generation failed: ${response.statusText}`)
+              let errorMessage = `Generation failed: ${response.status} ${response.statusText}`
+              
+              try {
+                const errorData = await response.json()
+                console.log('❌ Wizard Store: API Error Response:', errorData)
+                
+                if (errorData.error) {
+                  errorMessage = errorData.error
+                  
+                  // Handle specific error types with user-friendly messages
+                  if (errorData.error.includes('CORS')) {
+                    errorMessage = 'Network connection issue. Please refresh the page and try again.'
+                  } else if (errorData.error.includes('Validation failed')) {
+                    errorMessage = 'Invalid input data. Please check your selections and try again.'
+                  } else if (errorData.error.includes('Rate limit')) {
+                    errorMessage = 'Too many requests. Please wait a moment and try again.'
+                  }
+                }
+              } catch (e) {
+                // If JSON parsing fails, use text response
+                const errorText = await response.text()
+                console.log('❌ Wizard Store: Non-JSON Error Response:', errorText)
+                
+                if (errorText.includes('404') || errorText.includes('Not Found')) {
+                  errorMessage = 'Content generation service unavailable. Please try again later.'
+                } else if (errorText.includes('403') || errorText.includes('Forbidden')) {
+                  errorMessage = 'Access denied. Please refresh the page and try again.'
+                }
+              }
+              
+              throw new Error(errorMessage)
             }
 
             const result = await response.json()
+            console.log('🎯 Wizard Store: API Response Result:', JSON.stringify(result, null, 2))
+            const endTime = Date.now()
+            const totalTime = endTime - startTime
+            
+            // Calculate content statistics
+            const content = result.content || ''
+            const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0
+            const characterCount = content.length
+            const hashtagCount = (content.match(/#\w+/g) || []).length
             
             set({
               generatedContent: {
-                id: result.id,
+                id: result.id || `gen_${Date.now()}`,
                 content: result.content,
                 language: state.data.step3.language,
                 metadata: {
-                  generatedAt: new Date(result.generatedAt),
-                  modelUsed: result.modelUsed,
-                  tokensUsed: result.tokensUsed,
-                  processingTime: result.processingTime,
-                  researchSources: result.researchSources
+                  generatedAt: new Date(result.generatedAt || new Date().toISOString()),
+                  modelUsed: result.modelUsed || 'claude-3-5-sonnet-20241022',
+                  tokensUsed: result.tokensUsed || 0,
+                  processingTime: result.processingTime || totalTime,
+                  researchSources: result.researchSources || [],
+                  wordCount,
+                  characterCount,
+                  hashtagCount,
+                  qualityScore: result.quality_score
                 }
               },
               isGenerating: false
@@ -486,6 +604,38 @@ export const useWizardStore = create<WizardState>()(
         isStepCompleted: (step) => {
           const state = get()
           return state.metadata.completedSteps.includes(step)
+        },
+
+        // State integrity validation
+        validateStateIntegrity: () => {
+          const state = get()
+          
+          // Check for null/undefined values in required fields
+          const hasValidStep1 = typeof state.data.step1.purpose === 'string' && 
+                               typeof state.data.step1.goal === 'string'
+          
+          // Check that selections are independent
+          const purposeGoalIndependence = state.data.step1.purpose !== state.data.step1.goal
+          
+          console.log('🔍 State integrity check:', {
+            hasValidStep1,
+            purposeGoalIndependence,
+            currentPurpose: state.data.step1.purpose,
+            currentGoal: state.data.step1.goal
+          })
+          
+          return hasValidStep1 && purposeGoalIndependence
+        },
+
+        debugStateConsistency: () => {
+          const state = get()
+          console.log('🐛 Debug State Consistency:', {
+            step1: state.data.step1,
+            metadata: state.metadata,
+            isGenerating: state.isGenerating,
+            error: state.error,
+            generatedContent: state.generatedContent ? 'exists' : 'null'
+          })
         }
       }),
       {
@@ -494,7 +644,13 @@ export const useWizardStore = create<WizardState>()(
           data: state.data,
           metadata: state.metadata,
           smartDefaults: state.smartDefaults
-        })
+        }),
+        skipHydration: false, // Enable hydration to prevent client/server mismatch
+        version: 1, // Add version to handle schema changes
+        migrate: (persistedState: any, version: number) => {
+          // Handle migration from old state format if needed
+          return persistedState
+        }
       }
     )
   )

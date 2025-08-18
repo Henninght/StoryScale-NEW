@@ -250,8 +250,16 @@ export class HybridProcessor extends EventEmitter {
     flags: FeatureFlags
   ): Promise<HybridResult> {
     try {
+      // Handle research if enabled
+      let researchContext = null;
+      if (request.enableResearch && flags.enable_research_function) {
+        // TODO: Implement research function integration
+        // For now, research is disabled to prevent fake statistics
+        console.log('Research requested but not yet implemented');
+      }
+
       // Import and use custom prompts
-      const { buildLinkedInPrompt } = await import('../prompts/linkedin-prompts.js');
+      const { buildLinkedInPrompt } = await import('../prompts/linkedin-prompts.ts');
       
       // Build prompts using the template system with all wizard data
       const promptConfig = buildLinkedInPrompt({
@@ -261,27 +269,48 @@ export class HybridProcessor extends EventEmitter {
         tone: request.tone || 'professional',
         audience: request.targetAudience || 'professionals',
         format: request.format || 'insight',
+        postLength: request.postLength || 'medium',
         enableCTA: !!request.callToAction,
         callToAction: request.callToAction,
         url: request.url,
         keywords: request.keywords || [],
-        customInstructions: request.customInstructions || ''
+        customInstructions: request.customInstructions || '',
+        enableResearch: request.enableResearch || false,
+        researchContext: researchContext
       });
 
       const systemPrompt = promptConfig.system;
       const userPrompt = promptConfig.user;
 
       // Choose AI provider based on configuration or request
-      const aiProvider = request.aiProvider || 'anthropic'; // Default to Claude Sonnet 4
+      const aiProvider = request.aiProvider || process.env.AI_PROVIDER || 'openai'; // Default to OpenAI
       let content = '';
+      
+      console.log('🔧 processWithNewArchitecture - Starting generation');
+      console.log('🔧 AI Provider:', aiProvider);
+      console.log('🔧 Request topic:', request.topic);
+      console.log('🔧 Request purpose:', request.purpose);
+      console.log('🔧 Request goal:', request.goal);
+      console.log('🔧 System prompt length:', systemPrompt.length);
+      console.log('🔧 User prompt length:', userPrompt.length);
 
       if (aiProvider === 'anthropic' || aiProvider === 'claude') {
         // Use Claude/Anthropic
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+        console.log('🔧 ANTHROPIC_API_KEY exists:', !!apiKey);
+        console.log('🔧 ANTHROPIC_API_KEY starts with sk-ant:', apiKey?.startsWith('sk-ant'));
+        
+        if (!apiKey) {
+          console.error('❌ ANTHROPIC_API_KEY is not set in environment variables');
+          throw new Error('ANTHROPIC_API_KEY is not set in environment variables');
+        }
+        
         const Anthropic = (await import('@anthropic-ai/sdk')).default;
         const anthropic = new Anthropic({
-          apiKey: process.env.ANTHROPIC_API_KEY
+          apiKey: apiKey
         });
 
+        console.log('🔧 Calling Claude API...');
         const completion = await anthropic.messages.create({
           model: 'claude-3-5-sonnet-20241022', // Latest Claude Sonnet 3.5
           max_tokens: 1000,
@@ -292,12 +321,17 @@ export class HybridProcessor extends EventEmitter {
           ]
         });
 
+        console.log('🔧 Claude API response received');
+        console.log('🔧 Completion object:', JSON.stringify(completion, null, 2));
+
         // Claude returns content differently than OpenAI
         content = completion.content[0].type === 'text' 
           ? completion.content[0].text 
           : 'Failed to generate content';
           
-        console.log('Generated content using Claude Sonnet 3.5');
+        console.log('🔧 Generated content using Claude Sonnet 3.5');
+        console.log('🔧 Content length:', content.length);
+        console.log('🔧 Content preview:', content.substring(0, 100) + '...');
         
       } else {
         // Use OpenAI

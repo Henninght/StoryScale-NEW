@@ -15,23 +15,26 @@ export interface ContentPurposeData {
 
 export type ContentPurpose = 
   | 'share-insights'
-  | 'announce-news'
+  | 'offer-value'
   | 'ask-question'
   | 'share-story'
-  | 'promote-content';
+  | 'provide-solutions'
+  | 'celebrate-success';
 
 export type ContentGoal = 
   | 'increase-engagement'
   | 'generate-leads'
   | 'build-authority'
   | 'drive-traffic'
-  | 'start-discussion';
+  | 'build-network'
+  | 'get-feedback';
 
 // Step 2: Audience & Style
 export interface AudienceStyleData {
   audience: TargetAudience | '';
   tone: ContentTone | '';
   format: ContentFormat | '';
+  postLength: PostLength | '';
 }
 
 export type TargetAudience = 
@@ -53,6 +56,11 @@ export type ContentFormat =
   | 'tips'
   | 'insight'
   | 'modern';
+
+export type PostLength = 
+  | 'short'
+  | 'medium'
+  | 'long';
 
 // Step 3: Research & Enhancement
 export interface ResearchEnhancementData {
@@ -98,6 +106,7 @@ export interface SmartDefaults {
   audience: TargetAudience;
   tone: ContentTone;
   format: ContentFormat;
+  postLength: PostLength;
   language: SupportedLanguage;
   enableResearch: boolean;
 }
@@ -113,5 +122,19 @@ export interface GeneratedContent {
     tokensUsed: number;
     processingTime: number;
     researchSources?: string[];
+    qualityScore?: number;
+    wordCount?: number;
+    characterCount?: number;
+    hashtagCount?: number;
   };
+}
+
+// Performance metrics for generation tracking
+export interface GenerationPerformance {
+  totalTime: number;
+  aiGenerationTime: number;
+  processingTime: number;
+  status: 'success' | 'error' | 'timeout';
+  modelUsed: string;
+  tokensUsed: number;
 }

@@ -42,6 +42,15 @@ export interface LanguageAwareContentRequest extends BaseContentRequest {
     metaDescription?: string;
     targetRegion: 'norway' | 'nordic' | 'global';
   };
+  
+  // LinkedIn-specific fields
+  purpose?: string; // Content purpose (share-insights, offer-value, etc.)
+  goal?: string; // Content goal (increase-engagement, build-authority, etc.)
+  format?: string; // Content format (story, news, list, etc.)
+  postLength?: 'short' | 'medium' | 'long'; // Post length preference
+  callToAction?: string; // Optional call-to-action
+  url?: string; // Optional URL to reference
+  aiProvider?: string; // AI provider preference
 }
 
 // Request classification for routing decisions
