@@ -7,6 +7,9 @@ import { NextResponse } from 'next/server'
 import { ResearchFunction } from '@/lib/functions/research-function'
 import { LanguageAwareContentRequest } from '@/lib/types/language-aware-request'
 
+// Prevent static generation for this test endpoint
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const researchFunction = new ResearchFunction()

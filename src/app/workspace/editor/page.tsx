@@ -6,7 +6,7 @@
 'use client'
 
 import { Metadata } from 'next'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { validateFunction, QualityScore } from '@/lib/functions/validate-function'
 import { LanguageAwareContentRequest, SupportedLanguage } from '@/lib/types/language-aware-request'
@@ -17,7 +17,8 @@ function getDraftContent(draftId: string, title: string): string {
   return `# ${decodeURIComponent(title)}\n\nStart editing your draft here...`
 }
 
-export default function EditorPage() {
+// Separate component for the editor content that uses useSearchParams
+function EditorContent() {
   const searchParams = useSearchParams()
   const draftId = searchParams.get('draft')
   const title = searchParams.get('title')
@@ -433,5 +434,28 @@ export default function EditorPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Loading fallback component
+function EditorLoading() {
+  return (
+    <div className="h-full flex">
+      <div className="w-96 bg-white border-r border-gray-200 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+      <div className="flex-1 bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">Loading editor...</div>
+      </div>
+    </div>
+  )
+}
+
+// Main page component with Suspense boundary
+export default function EditorPage() {
+  return (
+    <Suspense fallback={<EditorLoading />}>
+      <EditorContent />
+    </Suspense>
   )
 }
