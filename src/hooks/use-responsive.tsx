@@ -56,8 +56,8 @@ export function useResponsive(): ResponsiveState {
 
   // Calculate responsive states - assume desktop until hydrated to prevent layout shifts
   const isMobile = isHydrated && windowSize.width > 0 && windowSize.width < BREAKPOINTS.mobile
-  const isTablet = isHydrated && windowSize.width >= BREAKPOINTS.mobile && windowSize.width < BREAKPOINTS.desktop
-  const isDesktop = !isHydrated || (isHydrated && windowSize.width >= BREAKPOINTS.desktop && windowSize.width < BREAKPOINTS.wide)
+  const isTablet = isHydrated && windowSize.width >= BREAKPOINTS.mobile && windowSize.width < BREAKPOINTS.tablet
+  const isDesktop = !isHydrated || (isHydrated && windowSize.width >= BREAKPOINTS.tablet && windowSize.width < BREAKPOINTS.wide)
   const isWide = isHydrated && windowSize.width >= BREAKPOINTS.wide
 
   // Determine current breakpoint
@@ -103,9 +103,9 @@ export function useBreakpoint(breakpoint: keyof typeof BREAKPOINTS): boolean {
     case 'mobile':
       return windowSize.width < BREAKPOINTS.mobile
     case 'tablet':
-      return windowSize.width >= BREAKPOINTS.mobile && windowSize.width < BREAKPOINTS.desktop
+      return windowSize.width >= BREAKPOINTS.mobile && windowSize.width < BREAKPOINTS.tablet
     case 'desktop':
-      return windowSize.width >= BREAKPOINTS.desktop && windowSize.width < BREAKPOINTS.wide
+      return windowSize.width >= BREAKPOINTS.tablet && windowSize.width < BREAKPOINTS.wide
     case 'wide':
       return windowSize.width >= BREAKPOINTS.wide
     default:

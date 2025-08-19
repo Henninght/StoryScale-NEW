@@ -44,8 +44,7 @@ export async function middleware(request: NextRequest) {
       }
     }
     
-    // For workspace routes, redirect to home for unauthenticated users
-    // TEMPORARILY DISABLED FOR TESTING
+    // TEMPORARILY DISABLED - allow access to workspace to see sign-in button
     // if (request.nextUrl.pathname.startsWith('/workspace')) {
     //   return NextResponse.redirect(new URL('/', request.url))
     // }
