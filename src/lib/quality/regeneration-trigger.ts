@@ -514,7 +514,7 @@ export class RegenerationTrigger {
     // Add CTA if missing
     if (qualityMetrics.ctaEffectiveness < 0.5) {
       const ctas = [
-        '\n\nWhat's your experience with this? Share your thoughts below 👇',
+        '\n\nWhat\'s your experience with this? Share your thoughts below 👇',
         '\n\nAgree? Disagree? Let me know in the comments!',
         '\n\nFollow for more insights on this topic 🚀'
       ];

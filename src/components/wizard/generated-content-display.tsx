@@ -5,7 +5,7 @@
 
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useWizardStore } from '@/stores/wizard-store'
 import { SaveService } from '@/lib/dashboard/save-service'
@@ -19,8 +19,21 @@ export function GeneratedContentDisplay() {
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [isHydrated, setIsHydrated] = useState(false)
 
-  if (!generatedContent) {
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
+
+  // Always log these to see if component is rendering
+  console.log('🎯🎯🎯 GeneratedContentDisplay: Component rendered')
+  console.log('🎯🎯🎯 GeneratedContentDisplay: Generated content exists:', !!generatedContent)
+  console.log('🎯🎯🎯 GeneratedContentDisplay: User:', user?.email || 'not authenticated')
+  console.log('🎯🎯🎯 GeneratedContentDisplay: Saving state:', saving)
+  console.log('🎯🎯🎯 GeneratedContentDisplay: Saved state:', saved)
+  console.log('🎯🎯🎯 GeneratedContentDisplay: Is hydrated:', isHydrated)
+
+  if (!generatedContent || !isHydrated) {
     return null
   }
 
@@ -43,9 +56,16 @@ export function GeneratedContentDisplay() {
   }
 
   const handleSave = async () => {
+    console.log('🔥🔥🔥 SAVE CLICKED: Starting save process')
+    console.log('🔥🔥🔥 SAVE CLICKED: User:', user)
+    console.log('🔥🔥🔥 SAVE CLICKED: User ID:', user?.id)
+    console.log('🔥🔥🔥 SAVE CLICKED: Generated content:', generatedContent)
+    console.log('🔥🔥🔥 SAVE CLICKED: Wizard data:', data)
+    
     setSaving(true)
     
     try {
+      console.log('🔥 SAVE: About to call SaveService.savePost')
       const result = await SaveService.savePost(
         generatedContent.content,
         {
@@ -58,21 +78,32 @@ export function GeneratedContentDisplay() {
         },
         {
           purpose: data.step1.purpose || 'General',
-          target: data.step1.targetAudience || 'Professionals',
+          target: data.step2.audience || 'Professionals',
           userId: user?.id
         }
       )
 
+      console.log('🔥 SAVE: SaveService.savePost completed with result:', result)
+
       if (result.success) {
+        console.log('🔥 SAVE: Save successful! Setting saved state to true')
         setSaved(true)
         setTimeout(() => setSaved(false), 3000)
+        
+        // Trigger a custom event to notify dashboard to refresh
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('contentSaved', { 
+            detail: { postId: result.postId } 
+          }))
+          console.log('🔥 SAVE: Dispatched contentSaved event')
+        }
       } else {
-        console.error('Save failed:', result.error)
-        // Could show error toast here
+        console.error('❌ Save failed:', result.error)
+        alert(`Save failed: ${result.error}`)
       }
     } catch (error) {
-      console.error('Save error:', error)
-      // Could show error toast here
+      console.error('❌ Save error:', error)
+      alert(`Save error: ${error}`)
     } finally {
       setSaving(false)
     }
@@ -201,7 +232,10 @@ export function GeneratedContentDisplay() {
         </button>
 
         <button
-          onClick={handleSave}
+          onClick={() => {
+            console.log('🔴🔴🔴 BUTTON CLICKED - handleSave will be called')
+            handleSave()
+          }}
           disabled={saving}
           className={cn(
             "flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md transition-colors duration-200",

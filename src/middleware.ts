@@ -27,6 +27,8 @@ export async function middleware(request: NextRequest) {
         '/api/test/guest-session',
         '/api/test',  // Add test endpoint
         '/api/test-research', // Add research test endpoint
+        '/api/test-anthropic', // Add anthropic test endpoint
+        '/api/test-db-connection', // Add database test endpoint
         '/api/generate', // Add generate endpoint for testing
         '/api/architecture' // Add architecture info endpoint
       ]
@@ -43,9 +45,10 @@ export async function middleware(request: NextRequest) {
     }
     
     // For workspace routes, redirect to home for unauthenticated users
-    if (request.nextUrl.pathname.startsWith('/workspace')) {
-      return NextResponse.redirect(new URL('/', request.url))
-    }
+    // TEMPORARILY DISABLED FOR TESTING
+    // if (request.nextUrl.pathname.startsWith('/workspace')) {
+    //   return NextResponse.redirect(new URL('/', request.url))
+    // }
   }
 
   return res

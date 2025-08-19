@@ -5,7 +5,7 @@
 
 'use client'
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useWizardStore } from '@/stores/wizard-store'
 import { TargetAudience, ContentTone, ContentFormat, PostLength } from '@/types/wizard'
 import { cn } from '@/lib/utils'
@@ -177,6 +177,10 @@ export function Step2AudienceStyle() {
     validateCurrentStep
   } = useWizardStore()
 
+  // Show all options directly - no expand/collapse functionality
+  const visibleFormatOptions = formatOptions
+  const visibleLengthOptions = postLengthOptions
+
   // Auto-advance disabled - users must manually click Next
   // useEffect(() => {
   //   const validation = validateCurrentStep()
@@ -209,243 +213,186 @@ export function Step2AudienceStyle() {
   const isComplete = validation.isValid
 
   return (
-    <div className="space-y-6">
-      {/* Step Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Audience & Style</h2>
-        <p className="mt-1 text-gray-600">
+    <div className="space-y-4">
+      {/* Step Header - More compact */}
+      <div className="mb-4">
+        <h2 className="text-xl font-bold text-gray-900">Audience & Style</h2>
+        <p className="mt-1 text-sm text-gray-600">
           Define who you're writing for and how you want to sound
         </p>
       </div>
 
-      {/* Audience Selection */}
+      {/* Audience Selection - Compact */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Who's your target audience? <span className="text-red-500">*</span>
+        <label className="block text-sm font-semibold text-gray-900 mb-2">
+          Target Audience <span className="text-red-500">*</span>
         </label>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-2">
           {audienceOptions.map((option) => (
             <button
               key={option.value}
               onClick={() => handleAudienceSelect(option.value)}
               className={cn(
-                "relative p-4 rounded-lg border-2 transition-all duration-200",
-                "hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500",
-                "text-center",
+                "relative p-2.5 rounded-md border transition-all duration-200",
+                "hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
+                "text-left",
                 data.step2.audience === option.value
                   ? "border-blue-500 bg-blue-50"
                   : "border-gray-200 bg-white hover:border-gray-300"
               )}
             >
-              <span className="text-2xl block mb-2">{option.icon}</span>
-              <h4 className={cn(
-                "font-medium",
-                data.step2.audience === option.value ? "text-blue-900" : "text-gray-900"
-              )}>
-                {option.label}
-              </h4>
-              <p className={cn(
-                "text-xs mt-1",
-                data.step2.audience === option.value ? "text-blue-700" : "text-gray-600"
-              )}>
-                {option.description}
-              </p>
-              {data.step2.audience === option.value && (
-                <div className="absolute top-2 right-2">
-                  <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tone Selection */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          What tone should we use? <span className="text-red-500">*</span>
-        </label>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {toneOptions.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => handleToneSelect(option.value)}
-              className={cn(
-                "relative p-4 rounded-lg border-2 transition-all duration-200",
-                "hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500",
-                "text-center",
-                data.step2.tone === option.value
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-gray-200 bg-white hover:border-gray-300"
-              )}
-            >
-              <span className="text-2xl block mb-2">{option.icon}</span>
-              <h4 className={cn(
-                "font-medium",
-                data.step2.tone === option.value ? "text-blue-900" : "text-gray-900"
-              )}>
-                {option.label}
-              </h4>
-              <p className={cn(
-                "text-xs mt-1",
-                data.step2.tone === option.value ? "text-blue-700" : "text-gray-600"
-              )}>
-                {option.description}
-              </p>
-              {data.step2.tone === option.value && (
-                <div className="absolute top-2 right-2">
-                  <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Format Selection */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Choose a content format <span className="text-red-500">*</span>
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {formatOptions.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => handleFormatSelect(option.value)}
-              className={cn(
-                "relative p-4 rounded-lg border-2 transition-all duration-200",
-                "hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500",
-                "text-left",
-                data.step2.format === option.value
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-gray-200 bg-white hover:border-gray-300"
-              )}
-            >
-              <div className="flex items-start space-x-3">
-                <span className="text-2xl">{option.icon}</span>
-                <div className="flex-1">
+              <div className="flex items-center space-x-2.5">
+                <span className="text-lg">{option.icon}</span>
+                <div className="flex-1 min-w-0">
                   <h4 className={cn(
-                    "font-medium",
-                    data.step2.format === option.value ? "text-blue-900" : "text-gray-900"
+                    "font-medium text-sm",
+                    data.step2.audience === option.value ? "text-blue-900" : "text-gray-900"
                   )}>
                     {option.label}
                   </h4>
                   <p className={cn(
-                    "text-xs mt-1",
-                    data.step2.format === option.value ? "text-blue-700" : "text-gray-600"
+                    "text-xs mt-0.5 line-clamp-1",
+                    data.step2.audience === option.value ? "text-blue-700" : "text-gray-600"
                   )}>
                     {option.description}
                   </p>
-                  <p className={cn(
-                    "text-xs mt-2 italic",
-                    data.step2.format === option.value ? "text-blue-600" : "text-gray-500"
-                  )}>
-                    "{option.example}"
-                  </p>
                 </div>
-              </div>
-              {data.step2.format === option.value && (
-                <div className="absolute top-2 right-2">
-                  <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                {data.step2.audience === option.value && (
+                  <svg className="w-4 h-4 text-blue-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
-                </div>
-              )}
+                )}
+              </div>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Post Length Selection */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Choose post length <span className="text-red-500">*</span>
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {postLengthOptions.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => handlePostLengthSelect(option.value)}
-              className={cn(
-                "relative p-4 rounded-lg border-2 transition-all duration-200",
-                "hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500",
-                "text-left h-full",
-                data.step2.postLength === option.value
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-gray-200 bg-white hover:border-gray-300"
-              )}
-            >
-              <div className="space-y-3">
-                <div className="flex items-center space-x-3">
-                  <span className="text-2xl">{option.icon}</span>
-                  <div>
-                    <h4 className={cn(
-                      "font-medium",
-                      data.step2.postLength === option.value ? "text-blue-900" : "text-gray-900"
+      {/* Unified Style Section */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">Content Style</h3>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Tone Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tone <span className="text-red-500">*</span>
+            </label>
+            <div className="space-y-2">
+              {toneOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => handleToneSelect(option.value)}
+                  className={cn(
+                    "w-full p-2 rounded-md border transition-all duration-200 text-left",
+                    "hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
+                    data.step2.tone === option.value
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 bg-white hover:border-gray-300"
+                  )}
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm">{option.icon}</span>
+                    <span className={cn(
+                      "font-medium text-sm",
+                      data.step2.tone === option.value ? "text-blue-900" : "text-gray-900"
                     )}>
                       {option.label}
-                    </h4>
-                    <p className={cn(
-                      "text-sm font-medium",
-                      data.step2.postLength === option.value ? "text-blue-700" : "text-gray-600"
-                    )}>
-                      {option.description}
-                    </p>
+                    </span>
+                    {data.step2.tone === option.value && (
+                      <svg className="w-3 h-3 text-blue-600 ml-auto" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    )}
                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <p className={cn(
-                    "text-xs",
-                    data.step2.postLength === option.value ? "text-blue-600" : "text-gray-500"
-                  )}>
-                    <strong>Best for:</strong> {option.usage}
-                  </p>
-                  <p className={cn(
-                    "text-xs italic",
-                    data.step2.postLength === option.value ? "text-blue-600" : "text-gray-500"
-                  )}>
-                    {option.example}
-                  </p>
-                </div>
-              </div>
-              
-              {data.step2.postLength === option.value && (
-                <div className="absolute top-2 right-2">
-                  <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {/* Selection Summary */}
-      {data.step2.audience && data.step2.tone && data.step2.format && data.step2.postLength && (
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Your selections:</h4>
-          <div className="flex flex-wrap gap-2">
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-              {audienceOptions.find(a => a.value === data.step2.audience)?.icon} {data.step2.audience}
-            </span>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-              {toneOptions.find(t => t.value === data.step2.tone)?.icon} {data.step2.tone}
-            </span>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-              {formatOptions.find(f => f.value === data.step2.format)?.icon} {data.step2.format}
-            </span>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-              {postLengthOptions.find(l => l.value === data.step2.postLength)?.icon} {data.step2.postLength} ({postLengthOptions.find(l => l.value === data.step2.postLength)?.characterRange} chars)
-            </span>
+          {/* Format Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Format <span className="text-red-500">*</span>
+            </label>
+            <div className="space-y-2">
+              {visibleFormatOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => handleFormatSelect(option.value)}
+                  className={cn(
+                    "w-full p-2 rounded-md border transition-all duration-200 text-left",
+                    "hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
+                    data.step2.format === option.value
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 bg-white hover:border-gray-300"
+                  )}
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm">{option.icon}</span>
+                    <span className={cn(
+                      "font-medium text-sm",
+                      data.step2.format === option.value ? "text-blue-900" : "text-gray-900"
+                    )}>
+                      {option.label}
+                    </span>
+                    {data.step2.format === option.value && (
+                      <svg className="w-3 h-3 text-blue-600 ml-auto" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Length Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Length <span className="text-red-500">*</span>
+            </label>
+            <div className="space-y-2">
+              {visibleLengthOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => handlePostLengthSelect(option.value)}
+                  className={cn(
+                    "w-full p-2 rounded-md border transition-all duration-200 text-left",
+                    "hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
+                    data.step2.postLength === option.value
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 bg-white hover:border-gray-300"
+                  )}
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm">{option.icon}</span>
+                    <div className="flex-1">
+                      <span className={cn(
+                        "font-medium text-sm",
+                        data.step2.postLength === option.value ? "text-blue-900" : "text-gray-900"
+                      )}>
+                        {option.label}
+                      </span>
+                      <div className={cn(
+                        "text-xs mt-0.5",
+                        data.step2.postLength === option.value ? "text-blue-700" : "text-gray-600"
+                      )}>
+                        {option.characterRange} chars
+                      </div>
+                    </div>
+                    {data.step2.postLength === option.value && (
+                      <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Completion Indicator - Auto-advance disabled */}
     </div>

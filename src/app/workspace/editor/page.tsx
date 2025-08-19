@@ -29,40 +29,52 @@ function EditorContent() {
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [versionHistory, setVersionHistory] = useState<Array<{id: string, content: string, timestamp: Date, qualityScore?: number}>>([])  
   const [currentPost, setCurrentPost] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(false)
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    const postId = searchParams.get('postId')
-    
-    if (postId) {
-      // Load saved post from SaveService
-      const savedPost = SaveService.getSavedPost(postId)
-      if (savedPost) {
-        setCurrentPost(savedPost)
-        setContent(savedPost.content)
+    const loadPost = async () => {
+      const postId = searchParams.get('postId')
+      
+      if (postId) {
+        // Load saved post from SaveService
+        setIsLoading(true)
+        try {
+          const savedPost = await SaveService.getSavedPost(postId)
+          if (savedPost) {
+            setCurrentPost(savedPost)
+            setContent(savedPost.content || '')
+            // Add initial version to history
+            setVersionHistory([{
+              id: `v1-${Date.now()}`,
+              content: savedPost.content || '',
+              timestamp: new Date(),
+              qualityScore: savedPost.metadata?.qualityScore
+            }])
+            // Initial quality validation
+            validateContent(savedPost.content || '')
+          }
+        } catch (error) {
+          console.error('Failed to load saved post:', error)
+        } finally {
+          setIsLoading(false)
+        }
+      } else if (draftId && title) {
+        // Fallback for old URL format
+        const draftContent = getDraftContent(draftId, title)
+        setContent(draftContent)
         // Add initial version to history
         setVersionHistory([{
           id: `v1-${Date.now()}`,
-          content: savedPost.content,
+          content: draftContent,
           timestamp: new Date(),
-          qualityScore: savedPost.metadata.qualityScore
         }])
         // Initial quality validation
-        validateContent(savedPost.content)
+        validateContent(draftContent)
       }
-    } else if (draftId && title) {
-      // Fallback for old URL format
-      const draftContent = getDraftContent(draftId, title)
-      setContent(draftContent)
-      // Add initial version to history
-      setVersionHistory([{
-        id: `v1-${Date.now()}`,
-        content: draftContent,
-        timestamp: new Date(),
-      }])
-      // Initial quality validation
-      validateContent(draftContent)
     }
+    
+    loadPost()
   }, [draftId, title, searchParams])
 
   // Debounced validation function
@@ -138,7 +150,7 @@ function EditorContent() {
       const result = await SaveService.updatePost(currentPost.id, {
         content,
         metadata: {
-          ...currentPost.metadata,
+          ...(currentPost.metadata || {}),
           characterCount: content.length,
           wordCount: content.split(/\s+/).filter(word => word.length > 0).length,
         }
@@ -151,7 +163,7 @@ function EditorContent() {
           content,
           lastEdited: new Date(),
           metadata: {
-            ...prev.metadata,
+            ...(prev.metadata || {}),
             characterCount: content.length,
             wordCount: content.split(/\s+/).filter(word => word.length > 0).length,
           }
@@ -207,6 +219,11 @@ function EditorContent() {
       </div>
     )
   }
+  
+  if (isLoading) {
+    return <EditorLoading />
+  }
+
   return (
     <div className="h-full flex">
       {/* Configuration Sidebar - 380px as per design reference */}
@@ -364,7 +381,7 @@ function EditorContent() {
         <div className="p-6 border-t border-gray-200">
           <button 
             onClick={enhanceContent}
-            disabled={isEnhancing || !content.trim()}
+            disabled={isEnhancing || !content?.trim()}
             className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-medium rounded-lg transition-colors duration-150 flex items-center justify-center"
           >
             {isEnhancing ? (
@@ -391,7 +408,7 @@ function EditorContent() {
               </h1>
               {currentPost && (
                 <p className="text-sm text-gray-500 mt-1">
-                  {currentPost.purpose} • {currentPost.target} • {currentPost.metadata.characterCount} characters
+                  {currentPost.purpose} • {currentPost.target} • {currentPost.metadata?.characterCount || 0} characters
                 </p>
               )}
               {draftId && !currentPost && (
@@ -399,7 +416,7 @@ function EditorContent() {
               )}
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">{content.length}/2200 characters</span>
+              <span className="text-sm text-gray-500">{(content || '').length}/2200 characters</span>
               {isValidating ? (
                 <div className="flex items-center">
                   <div className="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></div>
@@ -427,7 +444,7 @@ function EditorContent() {
             <textarea
               className="w-full h-full p-6 resize-none border-none focus:ring-0 focus:outline-none"
               placeholder="Paste your content here to start editing and refining..."
-              value={content}
+              value={content || ''}
               onChange={(e) => handleContentChange(e.target.value)}
             />
           </div>

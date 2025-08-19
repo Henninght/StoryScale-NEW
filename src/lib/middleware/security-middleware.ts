@@ -31,6 +31,7 @@ const defaultConfig: SecurityConfig = {
   allowedOrigins: [
     'http://localhost:3000',
     'http://localhost:3001',
+    'http://localhost:3002',
     'https://storyscale.app',
     'https://*.vercel.app'
   ],
@@ -155,13 +156,22 @@ class SecurityMiddleware {
     reason?: string;
   } {
     const origin = request.headers.get('origin');
+    const requestUrl = new URL(request.url);
     
-    // Allow same-origin requests
-    if (!origin) {
-      return { allowed: true };
+    // For same-origin requests (including when origin header is present)
+    if (!origin || origin === `${requestUrl.protocol}//${requestUrl.host}`) {
+      return { 
+        allowed: true,
+        headers: {
+          'Access-Control-Allow-Origin': origin || '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+          'Access-Control-Max-Age': '86400'
+        }
+      };
     }
 
-    // Check against allowed origins
+    // Check against allowed origins for cross-origin requests
     const isAllowed = this.config.allowedOrigins.some(allowedOrigin => {
       if (allowedOrigin.includes('*')) {
         // Handle wildcard patterns
@@ -172,8 +182,8 @@ class SecurityMiddleware {
     });
 
     if (!isAllowed) {
-      console.warn(`CORS violation from origin: ${origin}`);
-      return { allowed: false, reason: 'Origin not allowed' };
+      console.warn(`CORS violation from origin: ${origin}, request URL: ${requestUrl.origin}`);
+      return { allowed: false, reason: `Origin ${origin} not allowed` };
     }
 
     return {

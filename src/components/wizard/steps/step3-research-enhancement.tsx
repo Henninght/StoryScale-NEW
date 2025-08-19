@@ -6,7 +6,7 @@
 
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { useWizardStore } from '@/stores/wizard-store'
 import { WizardLanguageSelector } from '../language-selector'
 import { cn } from '@/lib/utils'
@@ -53,18 +53,6 @@ export function Step3ResearchEnhancement() {
 
   const [showResearchOptions, setShowResearchOptions] = useState(data.step3.enableResearch)
 
-  // Auto-advance disabled - users must manually click Next
-  // useEffect(() => {
-  //   const validation = validateCurrentStep()
-  //   if (validation.canAutoAdvance && onAutoAdvance) {
-  //     // Delay to show any changes
-  //     const timer = setTimeout(() => {
-  //       onAutoAdvance()
-  //     }, 800)
-  //     return () => clearTimeout(timer)
-  //   }
-  // }, [data.step3, validateCurrentStep, onAutoAdvance])
-
   const handleResearchToggle = (enabled: boolean) => {
     setEnableResearch(enabled)
     setShowResearchOptions(enabled)
@@ -83,179 +71,123 @@ export function Step3ResearchEnhancement() {
   const isComplete = validation.isValid // Always true for Step 3
 
   return (
-    <div className="space-y-6">
-      {/* Step Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Research & Enhancement</h2>
-        <p className="mt-1 text-gray-600">
+    <div className="space-y-4">
+      {/* Step Header - More compact */}
+      <div className="mb-4">
+        <h2 className="text-xl font-bold text-gray-900">Research & Enhancement</h2>
+        <p className="mt-1 text-sm text-gray-600">
           Configure language and research options for your content
         </p>
       </div>
 
-      {/* Language Selection */}
-      <WizardLanguageSelector 
-        onLanguageChange={setLanguage}
-        showContextHints={true}
-        className="mb-6"
-      />
-
-      {/* Research Toggle */}
-      <div className="border-t pt-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <h3 className="text-lg font-medium text-gray-900">
-              AI-Powered Research
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Enhance your content with real-time data and insights
-            </p>
-          </div>
-          <button
-            onClick={() => handleResearchToggle(!data.step3.enableResearch)}
-            className={cn(
-              "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
-              data.step3.enableResearch ? "bg-blue-600" : "bg-gray-200"
-            )}
-            role="switch"
-            aria-checked={data.step3.enableResearch}
-          >
-            <span
-              className={cn(
-                "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                data.step3.enableResearch ? "translate-x-6" : "translate-x-1"
-              )}
+      {/* Horizontal Layout - Language + Research */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Language Selection - Compact */}
+          <div>
+            <WizardLanguageSelector 
+              onLanguageChange={setLanguage}
+              showContextHints={false}
+              className=""
             />
-          </button>
-        </div>
-
-        {/* Research Benefits */}
-        {!data.step3.enableResearch && (
-          <div className="mt-4 bg-gray-50 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">
-              What research adds to your content:
-            </h4>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span>Current industry trends and statistics</span>
-              </li>
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span>Relevant examples and case studies</span>
-              </li>
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span>Fact-checked information and sources</span>
-              </li>
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span>Competitive insights and market analysis</span>
-              </li>
-            </ul>
           </div>
-        )}
 
-        {/* Research Depth Selection */}
-        {showResearchOptions && data.step3.enableResearch && (
-          <div className="mt-6 space-y-4 animate-in slide-in-from-top-2 duration-300">
-            <h4 className="text-sm font-medium text-gray-700">
-              Research Depth
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {researchDepthOptions.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => handleDepthSelect(option.value)}
+          {/* Research Toggle - Inline */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <label className="text-sm font-semibold text-gray-900">
+                  AI Research
+                </label>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Add real-time data & insights
+                  <button
+                    className="ml-1 text-blue-600 hover:text-blue-800"
+                    title="Research adds current trends, statistics, examples, and fact-checked information"
+                  >
+                    ℹ️
+                  </button>
+                </p>
+              </div>
+              <button
+                onClick={() => handleResearchToggle(!data.step3.enableResearch)}
+                className={cn(
+                  "relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500",
+                  data.step3.enableResearch ? "bg-blue-600" : "bg-gray-300"
+                )}
+                role="switch"
+                aria-checked={data.step3.enableResearch}
+              >
+                <span
                   className={cn(
-                    "relative p-4 rounded-lg border-2 transition-all duration-200",
-                    "hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500",
-                    "text-center",
-                    data.step3.researchDepth === option.value
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200 bg-white hover:border-gray-300"
+                    "inline-block h-3 w-3 transform rounded-full bg-white transition-transform",
+                    data.step3.enableResearch ? "translate-x-5" : "translate-x-1"
                   )}
-                >
-                  <span className="text-2xl block mb-2">{option.icon}</span>
-                  <h5 className={cn(
-                    "font-medium",
-                    data.step3.researchDepth === option.value ? "text-blue-900" : "text-gray-900"
-                  )}>
-                    {option.label}
-                  </h5>
-                  <p className={cn(
-                    "text-xs mt-1",
-                    data.step3.researchDepth === option.value ? "text-blue-700" : "text-gray-600"
-                  )}>
-                    {option.description}
-                  </p>
-                  <p className={cn(
-                    "text-xs mt-2 font-medium",
-                    data.step3.researchDepth === option.value ? "text-blue-600" : "text-gray-500"
-                  )}>
-                    {option.timeEstimate}
-                  </p>
-                  {data.step3.researchDepth === option.value && (
-                    <div className="absolute top-2 right-2">
-                      <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                </button>
-              ))}
+                />
+              </button>
             </div>
 
-            {/* Research Providers Info */}
-            <div className="bg-blue-50 rounded-lg p-4 mt-4">
-              <div className="flex items-start space-x-3">
-                <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-                <div>
-                  <h5 className="font-medium text-blue-900 text-sm">
-                    Powered by Advanced Research
-                  </h5>
-                  <p className="text-xs text-blue-800 mt-1">
-                    We use Firecrawl for LinkedIn insights and Tavily for real-time web data to enhance your content with the most relevant and up-to-date information.
-                  </p>
+            {/* Research Depth Selection - Compact */}
+            {data.step3.enableResearch && (
+              <div className="mt-2">
+                <label className="text-xs font-medium text-gray-700 mb-2 block">
+                  Research Depth
+                </label>
+                <div className="grid grid-cols-3 gap-1">
+                  {researchDepthOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => handleDepthSelect(option.value)}
+                      className={cn(
+                        "p-2 rounded-md border text-center transition-all duration-200",
+                        "hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
+                        data.step3.researchDepth === option.value
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200 bg-white hover:border-gray-300"
+                      )}
+                    >
+                      <div className="text-sm">{option.icon}</div>
+                      <div className={cn(
+                        "text-xs font-medium mt-1",
+                        data.step3.researchDepth === option.value ? "text-blue-900" : "text-gray-900"
+                      )}>
+                        {option.label.replace(' Research', '')}
+                      </div>
+                      <div className={cn(
+                        "text-xs mt-0.5",
+                        data.step3.researchDepth === option.value ? "text-blue-600" : "text-gray-500"
+                      )}>
+                        {option.timeEstimate}
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
-            </div>
+            )}
           </div>
-        )}
-      </div>
-
-      {/* Configuration Summary */}
-      <div className="bg-gray-50 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-gray-700 mb-2">Current Configuration:</h4>
-        <div className="flex flex-wrap gap-2">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            🌐 Language: {data.step3.language.toUpperCase()}
-          </span>
-          {data.step3.enableResearch ? (
-            <>
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                ✅ Research Enabled
-              </span>
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                {researchDepthOptions.find(d => d.value === data.step3.researchDepth)?.icon} {data.step3.researchDepth} depth
-              </span>
-            </>
-          ) : (
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-              ❌ Research Disabled
-            </span>
-          )}
         </div>
       </div>
+
+      {/* Configuration Summary - Compact */}
+      {(data.step3.language || data.step3.enableResearch) && (
+        <div className="bg-white border rounded-lg p-3">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-gray-600">Selected:</span>
+            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+              🌐 {data.step3.language.toUpperCase()}
+            </span>
+            {data.step3.enableResearch ? (
+              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                🔍 Research: {data.step3.researchDepth}
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                ❌ No Research
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Manual navigation notice */}
     </div>

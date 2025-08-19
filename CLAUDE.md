@@ -41,6 +41,11 @@ npm run test         # Run all tests
 npm run gen:component [name]    # Generate new component
 npm run gen:agent [type]        # Generate AI agent
 npm run gen:api [endpoint]      # Generate API route
+
+# Database & Profile System
+npm run db:migrate   # Run database migrations (includes user profiles)
+npm run db:seed      # Seed database with sample data
+npm run profile:setup # Initialize user profile system tables
 ```
 
 ## 🏗️ Project Architecture

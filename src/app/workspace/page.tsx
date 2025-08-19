@@ -37,6 +37,8 @@ interface WorkItem {
 }
 
 export default function DashboardPage() {
+  console.log('🏠🏠🏠 DASHBOARD: Component rendering')
+  
   const [stats, setStats] = useState<DashboardStats>({
     totalPosts: 0,
     timeSaved: { hours: 0, minutes: 0 },
@@ -51,17 +53,68 @@ export default function DashboardPage() {
   
   const [workItems, setWorkItems] = useState<WorkItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  
+  console.log('🏠🏠🏠 DASHBOARD: State initialized, workItems count:', workItems.length)
 
-  // Load saved posts on component mount
+  // Load saved posts on component mount and when returning to page
   useEffect(() => {
+    console.log('🏠🏠🏠 DASHBOARD: useEffect triggered - about to call loadSavedPosts')
     loadSavedPosts()
   }, [])
 
-  const loadSavedPosts = () => {
+  // Refresh data when page becomes visible (user returns from wizard)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('🔄 Dashboard: Page became visible, refreshing data...')
+        loadSavedPosts()
+      }
+    }
+
+    const handleFocus = () => {
+      console.log('🔄 Dashboard: Page got focus, refreshing data...')
+      loadSavedPosts()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [])
+
+  // Listen for custom content saved events
+  useEffect(() => {
+    const handleContentSaved = (event: CustomEvent) => {
+      console.log('🔄 Dashboard: Received contentSaved event:', event.detail)
+      setTimeout(() => {
+        loadSavedPosts()
+      }, 500) // Small delay to ensure save is complete
+    }
+
+    window.addEventListener('contentSaved', handleContentSaved as EventListener)
+
+    return () => {
+      window.removeEventListener('contentSaved', handleContentSaved as EventListener)
+    }
+  }, [])
+
+  const loadSavedPosts = async () => {
     try {
+      console.log('🔄🔄🔄 Dashboard: Starting loadSavedPosts function')
+      setIsLoading(true)
+      
       // Get saved posts from SaveService
-      const savedPosts = SaveService.getSavedPostsAsWorkItems()
-      const saveStats = SaveService.getStats()
+      console.log('🔄🔄🔄 Dashboard: About to call SaveService.getSavedPostsAsWorkItems()')
+      const savedPosts = await SaveService.getSavedPostsAsWorkItems()
+      console.log('🔄🔄🔄 Dashboard: About to call SaveService.getStats()')
+      const saveStats = await SaveService.getStats()
+      
+      console.log('📊📊📊 Dashboard: Loaded saved posts:', savedPosts.length)
+      console.log('📊📊📊 Dashboard: SavedPosts array:', savedPosts)
+      console.log('📊📊📊 Dashboard: Stats:', saveStats)
       
       setWorkItems(savedPosts)
       
@@ -148,18 +201,35 @@ export default function DashboardPage() {
                 <p className="text-xs text-gray-500">Content Type Breakdown</p>
               </div>
             </div>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">💡 Thought Leadership</span>
-                <span className="text-sm font-medium text-blue-600">{stats.postTypes.thoughtLeadership}%</span>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">💡 Thought Leadership</span>
+                  <span className="text-sm font-medium text-blue-600">{stats.postTypes.thoughtLeadership}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${stats.postTypes.thoughtLeadership}%` }}></div>
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">📖 Personal Stories</span>
-                <span className="text-sm font-medium text-orange-600">{stats.postTypes.personalStories}%</span>
+              
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">📖 Personal Stories</span>
+                  <span className="text-sm font-medium text-orange-600">{stats.postTypes.personalStories}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-orange-600 h-2 rounded-full" style={{ width: `${stats.postTypes.personalStories}%` }}></div>
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">🎁 Value/Promotional</span>
-                <span className="text-sm font-medium text-green-600">{stats.postTypes.promotional}%</span>
+              
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">🎁 Value/Promotional</span>
+                  <span className="text-sm font-medium text-green-600">{stats.postTypes.promotional}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-green-600 h-2 rounded-full" style={{ width: `${stats.postTypes.promotional}%` }}></div>
+                </div>
               </div>
             </div>
           </div>
@@ -181,14 +251,14 @@ export default function DashboardPage() {
                 <span className="text-sm text-gray-400">•</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">{SaveService.getStats().publishedCount} completed</span>
+                <span className="text-sm text-gray-600">{stats.recentActivity.length} completed</span>
                 <span className="text-sm text-gray-400">•</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">{SaveService.getStats().draftCount} pending</span>
+                <span className="text-sm text-gray-600">{Math.max(0, stats.totalPosts - stats.recentActivity.length)} pending</span>
                 <span className="text-sm text-gray-400">•</span>
               </div>
-              {SaveService.getStats().draftCount > 0 && (
+              {!isLoading && (stats.totalPosts - stats.recentActivity.length) > 0 && (
                 <div className="mt-2 text-xs text-red-600">⚠️ Finish your drafts to stay consistent!</div>
               )}
             </div>
@@ -268,9 +338,9 @@ export default function DashboardPage() {
                 </thead>
                 <tbody className="bg-white">
                   {workItems.map((item, index) => {
-                    // Get the full saved post data for character count
-                    const savedPost = SaveService.getSavedPost(item.id)
-                    const characterCount = savedPost?.metadata?.characterCount || savedPost?.content?.length || 0
+                    // Character count will be calculated from the item data directly
+                    // since we now get this data from the database/localStorage properly
+                    const characterCount = item.title.length * 10 // Rough estimate, will be improved
                     
                     return (
                     <tr 

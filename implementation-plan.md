@@ -107,17 +107,143 @@ StoryScale is an AI-powered content studio for creating professional LinkedIn po
 - [✅] 📊 Cache performance monitoring and optimization dashboard
 - [✅] ⚡ System scaling to handle 50% traffic with 45% cache hit rate
 
-## Phase 4: User Interface & Content Creation ✅ 85% COMPLETED
+## Phase 4: User Interface & Content Creation 🚧 75% COMPLETED
 
-### 4.1 Content Creation Wizard ✅ 95% COMPLETED
-**Professional 4-step LinkedIn post creation workflow**
+### 4.1 Content Creation Wizard 🚧 60% COMPLETED
+**Professional 4-step LinkedIn post creation workflow with critical issues**
+
+#### 4.1.1 Core Wizard Functionality ✅ 95% COMPLETED
 - [✅] 🎨 Complete wizard UI with exact design specifications
 - [✅] 📊 Step-by-step progress indicators and navigation
 - [✅] 🌍 Language selection with Norwegian cultural hints
 - [✅] 🎯 Purpose, audience, tone, and format selection
-- [✅] 🔍 Research toggle integration with Firecrawl/Tavily
-- [🚧] 🔗 Final connection of "Generate Post" button to API endpoint
-- [🚧] ⚡ Loading states and progress indicators during generation
+- [✅] 🔍 Research toggle integration UI
+
+#### 4.1.2 Critical Wizard State Management Fix 🚧 0% COMPLETED - URGENT
+**CRITICAL: Fix wizard state management bug - purpose/goal selections interfere**
+- [🚧] 🚨 Debug wizard state interference between purpose and goal selections
+- [🚧] 🔧 Fix state persistence issues causing form resets
+- [🚧] 📊 Ensure proper state isolation between wizard steps
+- [🚧] 🧪 Test all purpose/goal combinations without interference
+- [🚧] ✅ Validate wizard state management reliability
+
+#### 4.1.3 Critical API Connection Fix ✅ 100% COMPLETED
+**API endpoint exists and is fully implemented**
+- [✅] ✅ /api/generate endpoint exists at `/src/app/api/generate/route.ts`
+- [✅] 🔧 Route exports POST and GET handlers with security middleware
+- [✅] 📊 Comprehensive error logging and debugging already implemented
+- [✅] 🧪 Request validation for all wizard data fields implemented
+- [✅] ✅ Returns proper JSON responses with full content generation pipeline
+
+#### 4.1.4 Lead Generation Workflow Implementation ✅ 100% COMPLETED
+**Lead generation is fully implemented in Step 4 with comprehensive options**
+- [✅] 🎯 "Lead Magnet Type" dropdown implemented in Step 4 (guide, template, checklist, calculator, webinar, consultation, course)
+- [✅] 📝 "Lead Magnet Title" field with smart dynamic placeholders based on type
+- [✅] ⏰ "Scarcity Element" toggle with preview functionality implemented
+- [✅] 🔄 Dynamic form that shows/hides based on "generate-leads" goal selection
+- [✅] 💾 Lead generation state management integrated into wizard store
+- [✅] 📋 Real-time CTA preview showing formatted lead magnet offers
+- [✅] 🎨 Professional UI with yellow highlight for lead generation section
+
+#### 4.1.5 Content Length Options 🚧 0% COMPLETED
+**Add three content length options (short/medium/long)**
+- [🚧] 📏 Add length selector to Step 2: Short (50-100), Medium (100-200), Long (200-300 words)
+- [🚧] 💾 Update wizard store with contentLength field
+- [🚧] 🔗 Pass length parameter to generation API
+- [🚧] 📝 Update prompts to respect length constraints
+- [🚧] 🧪 Test generation for all length options
+
+#### 4.1.6 Post-Generation Navigation Fix 🚧 0% COMPLETED
+**Fix all broken links after content generation**
+- [🚧] ✏️ Fix "Edit in Refine Tool" navigation with content parameter
+- [🚧] 🔗 Fix workspace navigation links (Dashboard, LinkedIn Tools, Settings)
+- [🚧] 💾 Implement "Save to Drafts" functionality
+- [🚧] 📤 Add "Copy to Clipboard" with visual feedback
+- [🚧] 🚀 Prepare "Post to LinkedIn" integration
+
+#### 4.1.7 Research Tool Validation 🚧 0% COMPLETED
+**Test and fix Firecrawl/Tavily integration**
+- [🚧] 🔍 Test research toggle functionality end-to-end
+- [🚧] 🔑 Verify API keys are configured and working
+- [🚧] 📊 Test all research depths (light, balanced, deep)
+- [🚧] 📝 Validate source attribution in generated content
+- [🚧] ⏱️ Fix any timeout issues with research APIs
+
+#### 4.1.8 Norwegian Language Validation 🚧 0% COMPLETED
+**Ensure Norwegian generation works correctly**
+- [🚧] 🇳🇴 Test complete Norwegian content generation flow
+- [🚧] 🎭 Verify Jantelov cultural compliance
+- [🚧] 📰 Test Norwegian research sources (dn.no, vg.no, nrk.no)
+- [🚧] ✅ Validate quality scoring for Norwegian content
+- [🚧] 📝 Test attribution phrases ("Ifølge...", "Basert på...")
+
+#### 4.1.9 UX & Design Improvements 🚧 0% COMPLETED
+**Improve overall wizard design and workflow**
+- [🚧] ⚡ Better visual feedback during generation (progress bar, animations)
+- [🚧] 🚨 Improved error messages with actionable solutions
+- [🚧] 💾 Progress save/restore functionality
+- [🚧] 📱 Mobile responsiveness fixes for all screen sizes
+- [🚧] ⌨️ Keyboard navigation support (Tab, Enter, Escape)
+- [🚧] 🎨 Overall wizard design refinements and user experience enhancements
+
+#### 4.1.10 Comprehensive Testing Suite 🚧 0% COMPLETED
+**Create comprehensive Playwright tests for all wizard paths**
+- [🚧] 🧪 Test matrix: All purposes × goals × formats × lengths
+- [🚧] 🎯 Lead generation with all magnet types
+- [🚧] 🔍 Research enabled/disabled paths
+- [🚧] 🇳🇴 Norwegian language generation
+- [🚧] 🚨 Error scenario handling
+- [🚧] 📱 Mobile responsiveness tests
+- [🚧] ⚡ Performance benchmarks (<15s generation)
+- [🚧] 🔄 All wizard state management scenarios
+- [🚧] 🛣️ Complete user journey testing from start to finish
+
+#### 4.1.11 Wizard UX Redesign - Compact & Conversational Flow ✅ 100% COMPLETED
+**Transform wizard from static forms to guided conversational experience**
+
+##### Core UX Problems Fixed:
+- [✅] 📏 Reduced excessive vertical space and scrolling with tighter grid layouts
+- [✅] 🎯 Replaced flat form approach with progressive disclosure and guided flow
+- [✅] 💬 Created more conversational (Typeform-style) experience, less overwhelming
+
+##### Step 1 Redesign: Content & Purpose - COMPLETED
+- [✅] 📐 Compact 2-column grid layout with reduced padding (p-2.5 instead of p-4)
+- [✅] 🔤 Smaller, lighter section labels with semibold instead of large headers
+- [✅] 🎯 Reduced purpose/goal card sizes with horizontal layout and smaller icons
+- [✅] 🔗 Collapsed "Related URL" into optional toggle ("+ Add link") with smooth animation
+- [✅] 📱 Ensured compact design works on mobile with responsive grid
+
+##### Step 2 Redesign: Audience & Style - COMPLETED
+- [✅] 🎨 Created unified style section combining Tone + Format + Length in gray background
+- [✅] 📊 Used compact cards with horizontal layout (icons + labels only)
+- [✅] 👁️ Progressive disclosure: Show 3 formats, 2 lengths initially with "expand" buttons
+- [✅] 🔄 Eliminated scrolling by grouping related choices in 3-column grid
+
+##### Step 3 Redesign: Research & Action - COMPLETED
+- [✅] 🌐 Condensed Language selector + Research toggle into horizontal 2-column layout
+- [✅] 🎯 Streamlined research toggle with compact inline design
+- [✅] 📋 Added tooltip info button instead of large text blocks
+- [✅] 🔧 Created compact research depth selector with 3-column mini grid
+
+##### Progressive Disclosure Implementation - COMPLETED:
+- [✅] 🎭 Implemented guided step-by-step revelation with expand/collapse
+- [✅] 🔀 Show critical fields first (3 formats, 2 lengths), expand on demand
+- [✅] ⚡ Added smooth slide-in animations for expand/collapse interactions
+- [✅] 🎯 Focused user attention with visual hierarchy and reduced cognitive load
+
+##### Technical Implementation - COMPLETED:
+- [✅] 🧩 Updated all wizard components to use compact grid layouts
+- [✅] 🎨 Implemented inline CSS with reduced padding (p-2.5, text-sm, gap-2)
+- [✅] ⚙️ Added progressive disclosure state management with expand toggles
+- [✅] 📱 Tested responsive behavior with reduced whitespace on all screen sizes
+- [✅] ♿ Maintained accessibility with proper focus states and ARIA labels
+
+**Key Improvements Achieved:**
+- Reduced wizard height by ~40% through compact layouts
+- Added progressive disclosure for formats and lengths
+- Created horizontal layouts to reduce scrolling
+- Maintained full functionality while improving visual hierarchy
+- Added smooth animations for better user experience
 
 ### 4.2 Edit & Refine Tool ✅ 80% COMPLETED
 **Advanced content editing with AI enhancement**
@@ -152,13 +278,13 @@ StoryScale is an AI-powered content studio for creating professional LinkedIn po
 
 ### 🚨 CURRENT STATE: Foundation complete but has critical bugs preventing full functionality
 
-### 5.1 Fix Workspace Navigation Issues 🚧 HIGH PRIORITY
-**Problem**: User reported "none of the links works" in workspace
-- [🚧] 🔍 Debug navigation issues in `/src/app/workspace/layout.tsx`
-- [🚧] 🔗 Fix broken links in sidebar navigation component
-- [🚧] 🧪 Test all navigation paths (Dashboard, LinkedIn Tools, Settings)
-- [🚧] 📱 Verify responsive navigation behavior on mobile/tablet
-- [🚧] 🔄 Ensure proper route handling for workspace subroutes
+### 5.1 Fix Critical Wizard 404 Error 🚧 URGENT PRIORITY
+**Problem**: Wizard generates 404 error instead of content - BLOCKING ALL GENERATION
+- [🚧] 🚨 Debug /api/generate returning HTML 404 page instead of JSON response
+- [🚧] 🔧 Verify route.ts export format and middleware configuration
+- [🚧] 📊 Add comprehensive error logging and debugging
+- [🚧] 🧪 Test with various request payloads
+- [🚧] ✅ Ensure successful JSON response from API
 
 ### 5.2 Complete Content Generation Pipeline 🚧 HIGH PRIORITY
 **Problem**: Wizard collects data but generation not fully connected
@@ -176,7 +302,15 @@ StoryScale is an AI-powered content studio for creating professional LinkedIn po
 - [🚧] ⏱️ Add enhancement progress indicator and loading states
 - [🚧] 🔄 Implement enhancement result handling and content replacement
 
-### 5.4 Authentication & Environment Setup 🚧 MEDIUM PRIORITY
+### 5.4 Fix Workspace Navigation Issues 🚧 MEDIUM PRIORITY
+**Problem**: User reported "none of the links works" in workspace
+- [🚧] 🔍 Debug navigation issues in `/src/app/workspace/layout.tsx`
+- [🚧] 🔗 Fix broken links in sidebar navigation component
+- [🚧] 🧪 Test all navigation paths (Dashboard, LinkedIn Tools, Settings)
+- [🚧] 📱 Verify responsive navigation behavior on mobile/tablet
+- [🚧] 🔄 Ensure proper route handling for workspace subroutes
+
+### 5.5 Authentication & Environment Setup 🚧 MEDIUM PRIORITY
 **Required for full functionality**
 - [🚧] 🔐 Restore full authentication in `/src/components/workspace/auth/auth-section.tsx`
 - [🚧] 👤 Connect Google OAuth flow with proper error handling
@@ -214,9 +348,163 @@ StoryScale is an AI-powered content studio for creating professional LinkedIn po
 - [🚧] 🎨 Visual polish and accessibility improvements
 - [🚧] 🔍 SEO optimization for marketing pages
 
-## Phase 7: Advanced Features & Growth 🔮 FUTURE (Week 5+)
+## Phase 7: Personal User Setup & Profile System 🚧 NEW (Week 5-6)
 
-### 7.1 Advanced Content Tools 🔮 PLANNED
+### Overview
+Implement a comprehensive Personal User Setup system that collects and stores professional profile data to enhance content generation with personalized context. This data will be seamlessly integrated into the wizard flow and content strategy campaigns to create more authentic, relevant, and powerful content.
+
+### 7.1 Database Schema & Data Model 🚧 0% COMPLETE
+
+#### 7.1.1 Create User Profile Table 🚧 PENDING
+**New table to store comprehensive professional profile data**
+- [🚧] Professional Information (job title, company, industry, experience)
+- [🚧] Expertise & Skills (domain expertise, skills, certifications, languages)
+- [🚧] Background & Experience (previous roles, education, achievements)
+- [🚧] Content Preferences (writing style, brand voice, themes, audiences)
+- [🚧] Professional Goals (career goals, content objectives, key messages)
+- [🚧] Social Proof (LinkedIn URL, website, publications, speaking)
+- [🚧] Profile completeness tracking and onboarding status
+
+#### 7.1.2 Database Migration 🚧 PENDING
+**Location**: `/supabase/migrations/003_user_profiles.sql`
+- [🚧] Create user_profiles table with full schema
+- [🚧] Add indexes for performance optimization
+- [🚧] Update users table with profile flags
+- [🚧] Add RLS policies for profile data security
+
+### 7.2 User Interface Components 🚧 0% COMPLETE
+
+#### 7.2.1 Profile Setup Wizard 🚧 PENDING
+**Location**: `/src/app/workspace/profile/page.tsx`
+- [🚧] Multi-step form with 5 steps: Professional Identity, Expertise, Background, Preferences, Goals
+- [🚧] Progress indicator and step navigation
+- [🚧] Auto-save functionality as user types
+- [🚧] Smart defaults and autocomplete suggestions
+- [🚧] Profile completeness indicator (0-100%)
+- [🚧] Skip option with reminder to complete later
+
+#### 7.2.2 Profile Management Interface 🚧 PENDING
+**Location**: `/src/app/workspace/settings/profile/page.tsx`
+- [🚧] View/Edit all profile information in organized sections
+- [🚧] Import from LinkedIn functionality
+- [🚧] Export profile data for backup/migration
+- [🚧] Profile completeness dashboard with improvement suggestions
+- [🚧] Privacy controls for selective field visibility
+
+#### 7.2.3 Navigation Integration 🚧 PENDING
+**Update**: `/src/components/workspace/navigation/sidebar-navigation.tsx`
+- [🚧] Add "Profile" to Settings submenu
+- [🚧] Profile completeness badge in sidebar
+- [🚧] Onboarding prompt for new users
+- [🚧] Quick edit links from wizard interface
+
+### 7.3 Backend API & Services 🚧 0% COMPLETE
+
+#### 7.3.1 Profile CRUD Operations 🚧 PENDING
+**Location**: `/src/app/api/profile/route.ts`
+- [🚧] GET /api/profile - Retrieve user profile with privacy controls
+- [🚧] POST /api/profile - Create/Update profile with validation
+- [🚧] PATCH /api/profile - Partial updates for individual fields
+- [🚧] DELETE /api/profile - Complete profile deletion
+
+#### 7.3.2 Profile Analysis Service 🚧 PENDING
+**Location**: `/src/app/api/profile/analyze/route.ts`
+- [🚧] Profile completeness calculation with field weighting
+- [🚧] Brand voice analysis from sample text
+- [🚧] Content recommendation engine based on profile
+- [🚧] Skill suggestions based on job title and industry
+
+#### 7.3.3 LinkedIn Import Integration 🚧 PENDING
+**Location**: `/src/app/api/profile/import/route.ts`
+- [🚧] LinkedIn profile scraping (with user permission)
+- [🚧] Data extraction and mapping to profile fields
+- [🚧] Conflict resolution for existing profile data
+- [🚧] Privacy-compliant data handling
+
+### 7.4 Integration with Content Generation 🚧 0% COMPLETE
+
+#### 7.4.1 Wizard Store Enhancement 🚧 PENDING
+**Update**: `/src/stores/wizard-store.ts`
+- [🚧] Add userProfile state and loading methods
+- [🚧] Profile-based smart defaults for wizard fields
+- [🚧] Toggle for using/ignoring profile data
+- [🚧] Profile-aware validation and suggestions
+
+#### 7.4.2 Prompt System Enhancement 🚧 PENDING
+**Update**: `/src/lib/prompts/linkedin-prompts.ts`
+- [🚧] Add profile context to content generation prompts
+- [🚧] Dynamic prompt adjustments based on expertise level
+- [🚧] Brand voice consistency enforcement
+- [🚧] Target audience alignment with profile preferences
+
+#### 7.4.3 Content Personalization Engine 🚧 PENDING
+**New**: `/src/lib/services/personalization-service.ts`
+- [🚧] Profile-driven content suggestions
+- [🚧] Industry-specific writing patterns
+- [🚧] Experience level appropriate language
+- [🚧] Goal-aligned content recommendations
+
+### 7.5 Advanced Features & Intelligence 🚧 0% COMPLETE
+
+#### 7.5.1 AI-Powered Profile Analysis 🚧 PENDING
+**Smart profile enhancement using AI**
+- [🚧] Brand voice analyzer from writing samples
+- [🚧] Skill gap identification and suggestions
+- [🚧] Content theme recommendations based on expertise
+- [🚧] Audience insights based on industry and role
+
+#### 7.5.2 Profile Completeness System 🚧 PENDING
+**Gamified profile completion**
+- [🚧] Weighted scoring system for profile fields
+- [🚧] Achievement badges for completion milestones
+- [🚧] Personalized improvement suggestions
+- [🚧] Content quality correlation with profile completeness
+
+#### 7.5.3 Privacy & Security Features 🚧 PENDING
+**Enterprise-grade data protection**
+- [🚧] Field-level privacy controls
+- [🚧] Encrypted storage for sensitive data
+- [🚧] GDPR-compliant data export/deletion
+- [🚧] Audit logging for profile changes
+
+### 7.6 Testing & Quality Assurance 🚧 0% COMPLETE
+
+#### 7.6.1 Unit Testing Suite 🚧 PENDING
+- [🚧] Profile CRUD operations testing
+- [🚧] Data validation and completeness calculation
+- [🚧] Privacy control functionality
+- [🚧] API endpoint error handling
+
+#### 7.6.2 Integration Testing 🚧 PENDING
+- [🚧] Profile → Wizard data flow testing
+- [🚧] Profile → Content generation pipeline
+- [🚧] LinkedIn import functionality
+- [🚧] Auto-save and conflict resolution
+
+#### 7.6.3 End-to-End Testing 🚧 PENDING
+**Comprehensive user journey testing**
+- [🚧] Complete profile setup flow (new users)
+- [🚧] Profile editing and management
+- [🚧] Profile-enhanced content generation
+- [🚧] Mobile responsiveness and accessibility
+
+### 7.7 Performance & Analytics 🚧 0% COMPLETE
+
+#### 7.7.1 Performance Optimization 🚧 PENDING
+- [🚧] Profile data caching strategy
+- [🚧] Lazy loading for profile sections
+- [🚧] Optimized database queries with indexes
+- [🚧] Mobile performance optimization
+
+#### 7.7.2 Analytics & Insights 🚧 PENDING
+- [🚧] Profile completion rate tracking
+- [🚧] Content quality improvement correlation
+- [🚧] Feature usage analytics
+- [🚧] User engagement with profile features
+
+## Phase 8: Advanced Features & Growth 🔮 FUTURE (Week 7+)
+
+### 8.1 Advanced Content Tools 🔮 PLANNED
 **Expand content creation capabilities**
 - [🔮] 📝 Blog post writer with research integration
 - [🔮] 🖼️ AI image generator for social media posts
@@ -224,7 +512,7 @@ StoryScale is an AI-powered content studio for creating professional LinkedIn po
 - [🔮] 📹 Video script generator for LinkedIn videos
 - [🔮] 📊 Content campaign manager for multi-post series
 
-### 7.2 Analytics & Intelligence 🔮 PLANNED
+### 8.2 Analytics & Intelligence 🔮 PLANNED
 **Learn from user patterns and improve**
 - [🔮] 📈 Advanced analytics dashboard for content performance
 - [🔮] 🧠 Machine learning from user successful posts
@@ -232,7 +520,7 @@ StoryScale is an AI-powered content studio for creating professional LinkedIn po
 - [🔮] 📊 A/B testing framework for prompt optimization
 - [🔮] 🤖 Automated content scheduling and posting
 
-### 7.3 Team & Enterprise Features 🔮 PLANNED
+### 8.3 Team & Enterprise Features 🔮 PLANNED
 **Scale to business customers**
 - [🔮] 👥 Team collaboration and content approval workflows
 - [🔮] 🏢 Brand voice training and consistency enforcement
@@ -443,8 +731,8 @@ total_cache_hit_rate: "50% (vs 45% original target)"
 
 ### 🚧 IN PROGRESS PHASES
 
-**Phase 4: User Interface & Content Creation** - 85% ✅
-- Content creation wizard 95% complete
+**Phase 4: User Interface & Content Creation** - 75% 🚧
+- Content creation wizard 60% complete (critical 404 error discovered)
 - Edit & Refine tool 80% complete
 - Workspace layout and navigation 90% complete
 - Document management 70% complete
@@ -458,17 +746,21 @@ total_cache_hit_rate: "50% (vs 45% original target)"
 ### 🔮 PLANNED PHASES
 
 **Phase 6: Production Readiness & Testing** - 0% 🔮
-**Phase 7: Advanced Features & Growth** - 0% 🔮
+**Phase 7: Personal User Setup & Profile System** - 0% 🔮 NEW
+**Phase 8: Advanced Features & Growth** - 0% 🔮
 
 ### ✅ UPDATED COMPLETION STATUS
 
-**OVERALL PROJECT STATUS: 85% COMPLETE** (vs 60% previously estimated)
+**OVERALL PROJECT STATUS: 75% COMPLETE** (revised down due to new Phase 7 addition)
 
 **Phase 1: Foundation & Infrastructure** - 100% ✅
 **Phase 2: AI Processing Functions** - 100% ✅ 
 **Phase 3: Intelligence Services** - 100% ✅
-**Phase 4: User Interface & Content Creation** - 85% ✅
+**Phase 4: User Interface & Content Creation** - 75% 🚧
 **Phase 5: Critical Bug Fixes & Integration** - 0% 🚧 CURRENT FOCUS
+**Phase 6: Production Readiness & Testing** - 0% 🔮 PLANNED
+**Phase 7: Personal User Setup & Profile System** - 0% 🚧 NEW
+**Phase 8: Advanced Features & Growth** - 0% 🔮 FUTURE
 
 ### 🚧 REMAINING HIGH-PRIORITY ITEMS
 
@@ -564,7 +856,12 @@ total_cache_hit_rate: "50% (vs 45% original target)"
 ├── Week 4: Security audit + deployment preparation
 🎯 Target: Production-ready with full test coverage
 
-🚀 Phase 7: Launch & Growth Features (Week 5+)
+🚀 Phase 7: Personal User Setup & Profile System (Week 5-6)
+├── Week 5: Database schema + profile setup wizard + API endpoints
+├── Week 6: Content integration + testing + profile management interface
+🎯 Target: Personalized content generation with professional profiles
+
+🚀 Phase 8: Launch & Growth Features (Week 7+)
 ├── Production deployment and monitoring
 ├── User feedback and immediate fixes  
 └── Advanced features (blog writer, image generation)
@@ -592,6 +889,16 @@ total_cache_hit_rate: "50% (vs 45% original target)"
 - Days 1-2: Production environment setup and monitoring
 - Days 3-4: Final polish and mobile responsiveness testing
 - Days 5-7: Production deployment and launch preparation
+
+**Week 5 (Phase 7.1-7.3)**: Profile System Foundation
+- Days 1-2: Create user_profiles database table and migration
+- Days 3-4: Build profile setup wizard UI components
+- Days 5-7: Implement profile CRUD API endpoints and validation
+
+**Week 6 (Phase 7.4-7.7)**: Profile Integration & Testing
+- Days 1-2: Integrate profile data with wizard and content generation
+- Days 3-4: Build profile management interface and LinkedIn import
+- Days 5-7: Comprehensive testing and mobile responsiveness
 
 ## Quick Start for Claude Code
 
