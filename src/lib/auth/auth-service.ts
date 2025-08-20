@@ -158,6 +158,27 @@ export class AuthService {
   }
 
   /**
+   * Get session from URL (OAuth callback)
+   */
+  static async getSessionFromUrl() {
+    try {
+      // In newer Supabase versions, we use getSession after the URL is processed
+      // The detectSessionInUrl option handles URL parsing automatically
+      const { data: { session }, error } = await supabaseClient.auth.getSession()
+      
+      if (error) {
+        console.error('Get session from URL error:', error)
+        return { data: { session: null }, error }
+      }
+      
+      return { data: { session }, error: null }
+    } catch (error) {
+      console.error('Get session from URL error:', error)
+      return { data: { session: null }, error: error as AuthError }
+    }
+  }
+
+  /**
    * Subscribe to auth state changes
    */
   static onAuthStateChange(callback: (event: string, session: any) => void) {

@@ -49,6 +49,31 @@ export function useAuth() {
   const initializeAuth = async () => {
     try {
       console.log('🔐 useAuth: Initializing auth...')
+      
+      // Check if we have OAuth tokens in URL (e.g., from OAuth callback)
+      if (typeof window !== 'undefined' && window.location.hash) {
+        console.log('🔐 useAuth: Found URL hash, processing OAuth tokens...')
+        const hashParams = new URLSearchParams(window.location.hash.substring(1))
+        const accessToken = hashParams.get('access_token')
+        
+        if (accessToken) {
+          console.log('🔐 useAuth: Processing OAuth callback tokens...')
+          // Let Supabase handle the session from URL
+          const { data: { session }, error: sessionError } = await AuthService.getSessionFromUrl()
+          
+          if (sessionError) {
+            console.error('🔐 useAuth: Session from URL error:', sessionError)
+          } else if (session?.user) {
+            console.log('🔐 useAuth: Successfully established session from OAuth')
+            // Clear the hash from URL
+            window.history.replaceState({}, document.title, window.location.pathname + window.location.search)
+            
+            await handleSignIn(session.user)
+            return
+          }
+        }
+      }
+      
       const user = await AuthService.getCurrentUser()
       console.log('🔐 useAuth: Got user:', user?.email || 'none')
       
