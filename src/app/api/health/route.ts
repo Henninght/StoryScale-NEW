@@ -6,7 +6,7 @@ export async function GET() {
     // Check database connection if configured
     let dbStatus = 'not-configured';
     
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY && supabaseClient) {
       try {
         const { error: dbError } = await supabaseClient
           .from('users')
