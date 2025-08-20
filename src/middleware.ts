@@ -4,52 +4,64 @@ import type { NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
   const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req: request, res })
-
-  // Refresh session if expired - required for Server Components
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  // Check for guest session in localStorage (handled client-side)
-  const guestSessionId = request.headers.get('x-guest-session')
-
-  // Allow both authenticated and guest users - workspace is accessible without auth
-  if (!session && !guestSessionId) {
-    // For API routes, return 401 if no auth for protected endpoints
-    if (request.nextUrl.pathname.startsWith('/api/')) {
-      // Allow public API routes
-      const publicRoutes = [
-        '/api/health', 
-        '/api/config', 
-        '/api/auth/test', 
-        '/api/auth/callback', 
-        '/api/test/guest-session',
-        '/api/test',  
-        '/api/test-research', 
-        '/api/test-anthropic', 
-        '/api/test-db-connection', 
-        '/api/generate', // Allow generate endpoint for guest users
-        '/api/architecture',
-        '/api/cache' // Allow cache endpoints
-      ]
-      
-      // Check if the route is public or starts with a public prefix
-      const isPublicRoute = publicRoutes.some(route => 
-        request.nextUrl.pathname === route || 
-        request.nextUrl.pathname.startsWith(`${route}/`)
-      )
-      
-      if (!isPublicRoute) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-    }
-    
-    // Allow guest access to workspace - users can work without authentication
-    // Authentication is only required for cloud features like saving to database
+  
+  // Skip authentication checks if Supabase is not configured
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    // Allow all requests when Supabase is not configured
+    return res
   }
 
-  return res
+  try {
+    const supabase = createMiddlewareClient({ req: request, res })
+
+    // Refresh session if expired - required for Server Components
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    // Check for guest session in localStorage (handled client-side)
+    const guestSessionId = request.headers.get('x-guest-session')
+
+    // Allow both authenticated and guest users - workspace is accessible without auth
+    if (!session && !guestSessionId) {
+      // For API routes, return 401 if no auth for protected endpoints
+      if (request.nextUrl.pathname.startsWith('/api/')) {
+        // Allow public API routes
+        const publicRoutes = [
+          '/api/health', 
+          '/api/config', 
+          '/api/auth/test', 
+          '/api/auth/callback', 
+          '/api/test/guest-session',
+          '/api/test',  
+          '/api/test-research', 
+          '/api/test-anthropic', 
+          '/api/test-db-connection', 
+          '/api/generate', // Allow generate endpoint for guest users
+          '/api/architecture'
+        ]
+        
+        // Check if the route is public or starts with a public prefix
+        const isPublicRoute = publicRoutes.some(route => 
+          request.nextUrl.pathname === route || 
+          request.nextUrl.pathname.startsWith(`${route}/`)
+        )
+        
+        if (!isPublicRoute) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+      }
+      
+      // Allow guest access to workspace - users can work without authentication
+      // Authentication is only required for cloud features like saving to database
+    }
+
+    return res
+  } catch (error) {
+    // If Supabase middleware fails, continue without authentication
+    console.error('Middleware auth error:', error)
+    return res
+  }
 }
 
 export const config = {
