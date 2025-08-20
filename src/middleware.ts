@@ -14,9 +14,9 @@ export async function middleware(request: NextRequest) {
   // Check for guest session in localStorage (handled client-side)
   const guestSessionId = request.headers.get('x-guest-session')
 
-  // Allow both authenticated and guest users
+  // Allow both authenticated and guest users - workspace is accessible without auth
   if (!session && !guestSessionId) {
-    // For API routes, return 401 if no auth
+    // For API routes, return 401 if no auth for protected endpoints
     if (request.nextUrl.pathname.startsWith('/api/')) {
       // Allow public API routes
       const publicRoutes = [
@@ -25,12 +25,13 @@ export async function middleware(request: NextRequest) {
         '/api/auth/test', 
         '/api/auth/callback', 
         '/api/test/guest-session',
-        '/api/test',  // Add test endpoint
-        '/api/test-research', // Add research test endpoint
-        '/api/test-anthropic', // Add anthropic test endpoint
-        '/api/test-db-connection', // Add database test endpoint
-        '/api/generate', // Add generate endpoint for testing
-        '/api/architecture' // Add architecture info endpoint
+        '/api/test',  
+        '/api/test-research', 
+        '/api/test-anthropic', 
+        '/api/test-db-connection', 
+        '/api/generate', // Allow generate endpoint for guest users
+        '/api/architecture',
+        '/api/cache' // Allow cache endpoints
       ]
       
       // Check if the route is public or starts with a public prefix
@@ -44,10 +45,8 @@ export async function middleware(request: NextRequest) {
       }
     }
     
-    // TEMPORARILY DISABLED - allow access to workspace to see sign-in button
-    // if (request.nextUrl.pathname.startsWith('/workspace')) {
-    //   return NextResponse.redirect(new URL('/', request.url))
-    // }
+    // Allow guest access to workspace - users can work without authentication
+    // Authentication is only required for cloud features like saving to database
   }
 
   return res
