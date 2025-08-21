@@ -29,6 +29,7 @@ export class SaveService {
   private static readonly STORAGE_KEY = 'storyscale_saved_posts'
   private static cachedPosts: SavedPost[] | null = null
   private static cacheTimestamp = 0
+  private static cachedUserId: string | null = null // Track which user the cache belongs to
   private static readonly CACHE_DURATION = 5000 // 5 seconds cache
   
   /**
@@ -227,6 +228,14 @@ export class SaveService {
   private static async getCurrentUser() {
     try {
       console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Starting auth check')
+      console.log('👤👤👤 SAVE SERVICE: supabaseClient exists:', !!supabaseClient)
+      console.log('👤👤👤 SAVE SERVICE: supabaseClient.auth exists:', !!supabaseClient?.auth)
+      
+      if (!supabaseClient) {
+        console.error('👤👤👤 SAVE SERVICE: Supabase client is null - environment variables missing?')
+        return null
+      }
+      
       const { data: { user }, error } = await supabaseClient.auth.getUser()
       console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Got response, error:', !!error)
       console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Got user:', !!user)
@@ -255,52 +264,73 @@ export class SaveService {
         return []
       }
 
-      // Check cache first (but only for localStorage reads, not auth checks)
-      const now = Date.now()
-      if (this.cachedPosts && (now - this.cacheTimestamp) < this.CACHE_DURATION) {
-        console.log('📥📥📥 SAVE SERVICE: Returning cached posts:', this.cachedPosts.length)
-        return this.cachedPosts
-      }
+      // Always check authentication first - REMOVED the problematic fast check
+      console.log('📥📥📥 SAVE SERVICE: Checking current user with timeout...')
+      console.log('📥📥📥 SAVE SERVICE: Environment check - URL:', process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 20) + '...')
+      console.log('📥📥📥 SAVE SERVICE: Environment check - Key present:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
       
-      // Fast check: if localStorage has posts, we're likely in guest mode - skip auth check
-      const hasLocalStorageData = !!localStorage.getItem(this.STORAGE_KEY)
-      console.log('📥📥📥 SAVE SERVICE: Fast check - localStorage has data:', hasLocalStorageData)
-      
+      const startTime = Date.now()
       let user = null
-      if (!hasLocalStorageData) {
-        // Only do auth check if we don't have localStorage data (might be authenticated user)
-        console.log('📥📥📥 SAVE SERVICE: Checking current user with timeout...')
-        const startTime = Date.now()
-        try {
-          // Add timeout to prevent hanging
-          const userPromise = this.getCurrentUser()
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Auth check timeout')), 1000)
-          )
-          user = await Promise.race([userPromise, timeoutPromise])
-          const elapsed = Date.now() - startTime
-          console.log('📥📥📥 SAVE SERVICE: User check result:', user ? 'authenticated' : 'guest', `(took ${elapsed}ms)`)
-        } catch (authError) {
-          const elapsed = Date.now() - startTime
-          console.log('📥📥📥 SAVE SERVICE: Auth check failed/timeout, defaulting to guest mode:', authError.message, `(took ${elapsed}ms)`)
-          user = null
-        }
-      } else {
-        console.log('📥📥📥 SAVE SERVICE: Skipping auth check - using localStorage data for guest mode')
+      
+      try {
+        // Increased timeout for better reliability
+        const userPromise = this.getCurrentUser()
+        const timeoutPromise = new Promise<null>((resolve) => 
+          setTimeout(() => {
+            console.log('📥📥📥 SAVE SERVICE: Auth check timeout, assuming guest mode')
+            resolve(null)
+          }, 3000) // Increased from 1s to 3s
+        )
+        user = await Promise.race([userPromise, timeoutPromise])
+        const elapsed = Date.now() - startTime
+        console.log('📥📥📥 SAVE SERVICE: User check result:', user ? `authenticated (${user.email})` : 'guest', `(took ${elapsed}ms)`)
+        console.log('📥📥📥 SAVE SERVICE: User ID:', user?.id || 'none')
+      } catch (authError) {
+        const elapsed = Date.now() - startTime
+        console.log('📥📥📥 SAVE SERVICE: Auth check failed, defaulting to guest mode:', authError.message, `(took ${elapsed}ms)`)
+        user = null
+      }
+
+      // Check cache with user-specific validation
+      const now = Date.now()
+      const cacheUserId = user?.id || 'guest'
+      const isCacheValid = this.cachedPosts && 
+                          this.cachedUserId === cacheUserId && 
+                          (now - this.cacheTimestamp) < this.CACHE_DURATION
+
+      if (isCacheValid) {
+        console.log('📥📥📥 SAVE SERVICE: Returning cached posts for user:', cacheUserId, 'count:', this.cachedPosts.length)
+        return this.cachedPosts
       }
       
       if (user) {
         // Get posts from database for authenticated users
         console.log('📥📥📥 SAVE SERVICE: Getting posts from database for user:', user.id)
-        return await this.getSavedPostsFromDatabase(user.id)
+        
+        // Check if we should migrate localStorage data to database
+        const localStoragePosts = this.getSavedPostsFromLocalStorage()
+        if (localStoragePosts.length > 0) {
+          console.log('📥📥📥 SAVE SERVICE: Found localStorage posts, migrating to database...')
+          await this.migrateLocalStorageToDatabase(localStoragePosts, user.id)
+        }
+        
+        const posts = await this.getSavedPostsFromDatabase(user.id)
+        
+        // Cache the result with user ID
+        this.cachedPosts = posts
+        this.cachedUserId = user.id
+        this.cacheTimestamp = Date.now()
+        
+        return posts
       } else {
         // Get posts from localStorage for guest users
         console.log('📥📥📥 SAVE SERVICE: Getting posts from localStorage (guest mode)')
         const posts = this.getSavedPostsFromLocalStorage()
         console.log('📥📥📥 SAVE SERVICE: Retrieved posts count:', posts.length)
         
-        // Cache the result
+        // Cache the result for guest user
         this.cachedPosts = posts
+        this.cachedUserId = 'guest'
         this.cacheTimestamp = Date.now()
         
         return posts
@@ -313,6 +343,7 @@ export class SaveService {
       
       // Cache the fallback result
       this.cachedPosts = posts
+      this.cachedUserId = 'guest'
       this.cacheTimestamp = Date.now()
       
       return posts
@@ -324,15 +355,31 @@ export class SaveService {
    */
   private static async getSavedPostsFromDatabase(userId: string): Promise<SavedPost[]> {
     try {
-      const { data: documents, error } = await supabaseClient
+      console.log('🗃️🗃️🗃️ SAVE SERVICE: getSavedPostsFromDatabase called for user:', userId)
+      console.log('🗃️🗃️🗃️ SAVE SERVICE: About to query documents table...')
+      
+      // Add timeout to prevent hanging queries
+      const queryPromise = supabaseClient
         .from('documents')
         .select('*')
         .eq('user_id', userId)
         .eq('type', 'linkedin')
         .order('created_at', { ascending: false })
 
+      const timeoutPromise = new Promise<{ data: null; error: Error }>((_, reject) =>
+        setTimeout(() => reject(new Error('Database query timeout')), 5000)
+      )
+
+      const result = await Promise.race([queryPromise, timeoutPromise])
+      const { data: documents, error } = result
+
+      console.log('🗃️🗃️🗃️ SAVE SERVICE: Database query completed')
+      console.log('🗃️🗃️🗃️ SAVE SERVICE: Error:', error)
+      console.log('🗃️🗃️🗃️ SAVE SERVICE: Documents found:', documents?.length || 0)
+      console.log('🗃️🗃️🗃️ SAVE SERVICE: Raw documents:', documents)
+
       if (error) {
-        console.error('Database fetch error:', error)
+        console.error('🗃️🗃️🗃️ SAVE SERVICE: Database fetch error:', error)
         throw new Error(`Failed to fetch from database: ${error.message}`)
       }
 
@@ -486,11 +533,83 @@ export class SaveService {
   }
 
   /**
-   * Convert saved posts to dashboard WorkItem format
+   * Get saved posts with explicit user (bypasses auth timeout issues)
    */
-  static async getSavedPostsAsWorkItems(): Promise<WorkItem[]> {
-    console.log('🗂️🗂️🗂️ SAVE SERVICE: getSavedPostsAsWorkItems called')
-    const posts = await this.getSavedPosts()
+  static async getSavedPostsWithUser(user?: any): Promise<SavedPost[]> {
+    try {
+      console.log('📥🔄📥 SAVE SERVICE: getSavedPostsWithUser called with user:', user?.email || 'guest')
+      
+      // Check if we're on the client side
+      if (typeof window === 'undefined') {
+        console.log('📥🔄📥 SAVE SERVICE: Server side, returning empty array')
+        return []
+      }
+
+      // Check cache with user-specific validation
+      const now = Date.now()
+      const cacheUserId = user?.id || 'guest'
+      const isCacheValid = this.cachedPosts && 
+                          this.cachedUserId === cacheUserId && 
+                          (now - this.cacheTimestamp) < this.CACHE_DURATION
+
+      if (isCacheValid) {
+        console.log('📥🔄📥 SAVE SERVICE: Returning cached posts for user:', cacheUserId, 'count:', this.cachedPosts.length)
+        return this.cachedPosts
+      }
+      
+      if (user) {
+        // Get posts from database for authenticated users
+        console.log('📥🔄📥 SAVE SERVICE: Getting posts from database for user:', user.id)
+        
+        // Check if we should migrate localStorage data to database
+        const localStoragePosts = this.getSavedPostsFromLocalStorage()
+        if (localStoragePosts.length > 0) {
+          console.log('📥🔄📥 SAVE SERVICE: Found localStorage posts, migrating to database...')
+          await this.migrateLocalStorageToDatabase(localStoragePosts, user.id)
+        }
+        
+        const posts = await this.getSavedPostsFromDatabase(user.id)
+        
+        // Cache the result with user ID
+        this.cachedPosts = posts
+        this.cachedUserId = user.id
+        this.cacheTimestamp = Date.now()
+        
+        return posts
+      } else {
+        // Get posts from localStorage for guest users
+        console.log('📥🔄📥 SAVE SERVICE: Getting posts from localStorage (guest mode)')
+        const posts = this.getSavedPostsFromLocalStorage()
+        console.log('📥🔄📥 SAVE SERVICE: Retrieved posts count:', posts.length)
+        
+        // Cache the result for guest user
+        this.cachedPosts = posts
+        this.cachedUserId = 'guest'
+        this.cacheTimestamp = Date.now()
+        
+        return posts
+      }
+    } catch (error) {
+      console.error('📥🔄📥 SAVE SERVICE: Get saved posts with user error:', error)
+      // Fallback to localStorage if database fails
+      console.log('📥🔄📥 SAVE SERVICE: Falling back to localStorage due to error')
+      const posts = this.getSavedPostsFromLocalStorage()
+      
+      // Cache the fallback result
+      this.cachedPosts = posts
+      this.cachedUserId = 'guest'
+      this.cacheTimestamp = Date.now()
+      
+      return posts
+    }
+  }
+
+  /**
+   * Convert saved posts to dashboard WorkItem format - with explicit user
+   */
+  static async getSavedPostsAsWorkItems(user?: any): Promise<WorkItem[]> {
+    console.log('🗂️🗂️🗂️ SAVE SERVICE: getSavedPostsAsWorkItems called with user:', user?.email || 'guest')
+    const posts = await this.getSavedPostsWithUser(user)
     console.log('🗂️🗂️🗂️ SAVE SERVICE: Got posts for conversion:', posts.length)
     
     const workItems = posts.map(post => ({
@@ -563,5 +682,70 @@ export class SaveService {
     const minutes = totalMinutes % 60
     
     return { hours, minutes }
+  }
+
+  /**
+   * Migrate localStorage posts to database for newly authenticated users
+   */
+  private static async migrateLocalStorageToDatabase(localPosts: SavedPost[], userId: string): Promise<void> {
+    try {
+      console.log('🔄 SAVE SERVICE: Starting migration of', localPosts.length, 'localStorage posts to database')
+      
+      // Get existing posts from database to avoid duplicates
+      const existingPosts = await this.getSavedPostsFromDatabase(userId)
+      const existingTitles = new Set(existingPosts.map(p => p.title))
+      
+      // Filter out posts that already exist in database
+      const postsToMigrate = localPosts.filter(post => !existingTitles.has(post.title))
+      
+      console.log('🔄 SAVE SERVICE: After deduplication, migrating', postsToMigrate.length, 'unique posts')
+      
+      // Save each post to database
+      let migratedCount = 0
+      for (const post of postsToMigrate) {
+        try {
+          await this.saveToDatabase(post, userId)
+          migratedCount++
+        } catch (error) {
+          console.error('🔄 SAVE SERVICE: Failed to migrate post:', post.title, error)
+        }
+      }
+      
+      console.log('🔄 SAVE SERVICE: Successfully migrated', migratedCount, 'posts to database')
+      
+      // Clear localStorage after successful migration
+      if (migratedCount > 0) {
+        console.log('🔄 SAVE SERVICE: Clearing localStorage after successful migration')
+        localStorage.removeItem(this.STORAGE_KEY)
+      }
+      
+    } catch (error) {
+      console.error('🔄 SAVE SERVICE: Migration failed:', error)
+      // Don't clear localStorage if migration failed
+    }
+  }
+
+  /**
+   * Clear localStorage data (useful when switching between guest and authenticated modes)
+   */
+  static clearLocalStorage(): void {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(this.STORAGE_KEY)
+        console.log('🗑️ SAVE SERVICE: localStorage cleared')
+      }
+    } catch (error) {
+      console.error('🗑️ SAVE SERVICE: Failed to clear localStorage:', error)
+    }
+  }
+
+  /**
+   * Clear cache to force fresh data fetch
+   */
+  static async clearCache() {
+    this.cachedPosts = null
+    this.cachedUserId = null
+    this.cacheTimestamp = 0
+    console.log('🗑️🗑️🗑️ SAVE SERVICE: Cache cleared, forcing fresh auth check')
   }
 }

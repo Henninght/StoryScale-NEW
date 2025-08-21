@@ -23,10 +23,16 @@ export class AuthService {
    */
   static async signInWithGoogle(): Promise<{ error?: AuthError }> {
     try {
+      // Force localhost redirect in development to prevent redirect to production
+      const redirectUrl = process.env.NODE_ENV === 'development' 
+        ? `${window.location.origin}/workspace` // Use actual port instead of hardcoded 3008
+        : `${window.location.origin}/workspace`
+      
+      console.log('🔐 Signing in with Google, redirect to:', redirectUrl)
       const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/workspace`
+          redirectTo: redirectUrl
         }
       })
       
@@ -162,16 +168,18 @@ export class AuthService {
    */
   static async getSessionFromUrl() {
     try {
-      // In newer Supabase versions, we use getSession after the URL is processed
-      // The detectSessionInUrl option handles URL parsing automatically
-      const { data: { session }, error } = await supabaseClient.auth.getSession()
+      // Use setSession to properly handle the OAuth callback tokens
+      const { data, error } = await supabaseClient.auth.setSession({
+        access_token: new URLSearchParams(window.location.hash.substring(1)).get('access_token') || '',
+        refresh_token: new URLSearchParams(window.location.hash.substring(1)).get('refresh_token') || ''
+      })
       
       if (error) {
-        console.error('Get session from URL error:', error)
+        console.error('Set session from URL error:', error)
         return { data: { session: null }, error }
       }
       
-      return { data: { session }, error: null }
+      return { data: { session: data.session }, error: null }
     } catch (error) {
       console.error('Get session from URL error:', error)
       return { data: { session: null }, error: error as AuthError }

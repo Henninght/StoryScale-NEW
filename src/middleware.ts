@@ -38,7 +38,9 @@ export async function middleware(request: NextRequest) {
           '/api/test-anthropic', 
           '/api/test-db-connection', 
           '/api/generate', // Allow generate endpoint for guest users
-          '/api/architecture'
+          '/api/architecture',
+          '/api/debug-session',  // Debug endpoints for troubleshooting
+          '/api/debug-user'
         ]
         
         // Check if the route is public or starts with a public prefix

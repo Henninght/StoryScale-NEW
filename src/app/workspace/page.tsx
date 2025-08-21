@@ -7,37 +7,15 @@
 
 import { useState, useEffect } from 'react'
 import { ChevronDown, BarChart3, Clock, CheckCircle2, MoreVertical } from 'lucide-react'
+import { DashboardService } from '@/lib/dashboard/dashboard-service'
 import { SaveService } from '@/lib/dashboard/save-service'
-
-// Inline types to avoid import issues
-interface DashboardStats {
-  totalPosts: number
-  timeSaved: { hours: number; minutes: number }
-  completionRate: number
-  postTypes: {
-    thoughtLeadership: number
-    personalStories: number
-    promotional: number
-  }
-  recentActivity: Array<{
-    id: string
-    title: string
-    action: 'created' | 'edited' | 'published'
-    timestamp: string
-  }>
-}
-
-interface WorkItem {
-  id: string
-  title: string
-  target: string
-  purpose: string
-  status: 'Draft' | 'Published' | 'Archived'
-  lastEdited: string
-}
+import { DashboardStats, WorkItem } from '@/types/dashboard'
+import { useAuth } from '@/hooks/use-auth'
 
 export default function DashboardPage() {
   console.log('🏠🏠🏠 DASHBOARD: Component rendering')
+  
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   
   const [stats, setStats] = useState<DashboardStats>({
     totalPosts: 0,
@@ -106,62 +84,26 @@ export default function DashboardPage() {
       console.log('🔄🔄🔄 Dashboard: Starting loadSavedPosts function')
       setIsLoading(true)
       
-      // Get saved posts from SaveService
-      console.log('🔄🔄🔄 Dashboard: About to call SaveService.getSavedPostsAsWorkItems()')
-      const savedPosts = await SaveService.getSavedPostsAsWorkItems()
-      console.log('🔄🔄🔄 Dashboard: About to call SaveService.getStats()')
-      const saveStats = await SaveService.getStats()
+      // Force clear cache to ensure fresh auth check
+      await SaveService.clearCache()
       
-      console.log('📊📊📊 Dashboard: Loaded saved posts:', savedPosts.length)
-      console.log('📊📊📊 Dashboard: SavedPosts array:', savedPosts)
-      console.log('📊📊📊 Dashboard: Stats:', saveStats)
+      // Get dashboard data - stats from DashboardService, real work items from SaveService
+      console.log('🔄🔄🔄 Dashboard: About to call SaveService for real work items')
+      console.log('🔄🔄🔄 Dashboard: Passing user to SaveService:', user?.email || 'guest')
+      const [dashboardStats, workItems] = await Promise.all([
+        DashboardService.getDashboardStats(), // Keep mock stats for now
+        SaveService.getSavedPostsAsWorkItems(user) // Pass user directly to avoid auth timeout
+      ])
       
-      setWorkItems(savedPosts)
+      console.log('📊📊📊 Dashboard: Loaded dashboard stats:', dashboardStats)
+      console.log('📊📊📊 Dashboard: Loaded work items:', workItems.length)
       
-      // Calculate stats from saved posts
-      const timeSaved = SaveService.calculateTimeSaved(saveStats.totalPosts)
-      const completionRate = saveStats.totalPosts > 0 
-        ? Math.round((saveStats.publishedCount / saveStats.totalPosts) * 100)
-        : 0
-
-      // Calculate post type distribution
-      const purposeCounts = savedPosts.reduce((acc, item) => {
-        const purpose = item.purpose.toLowerCase()
-        if (purpose.includes('insights') || purpose.includes('thought') || purpose.includes('authority')) {
-          acc.thoughtLeadership++
-        } else if (purpose.includes('story') || purpose.includes('share') || purpose.includes('personal')) {
-          acc.personalStories++
-        } else if (purpose.includes('value') || purpose.includes('lead') || purpose.includes('promotional')) {
-          acc.promotional++
-        } else {
-          acc.thoughtLeadership++ // Default
-        }
-        return acc
-      }, { thoughtLeadership: 0, personalStories: 0, promotional: 0 })
-
-      const total = saveStats.totalPosts || 1
-      const postTypes = {
-        thoughtLeadership: Math.round((purposeCounts.thoughtLeadership / total) * 100),
-        personalStories: Math.round((purposeCounts.personalStories / total) * 100),
-        promotional: Math.round((purposeCounts.promotional / total) * 100)
-      }
-
-      setStats({
-        totalPosts: saveStats.totalPosts,
-        timeSaved,
-        completionRate,
-        postTypes,
-        recentActivity: savedPosts.slice(0, 3).map(item => ({
-          id: item.id,
-          title: item.title,
-          action: item.status === 'Published' ? 'published' as const : 'created' as const,
-          timestamp: item.lastEdited
-        }))
-      })
+      setStats(dashboardStats)
+      setWorkItems(workItems)
       
       setIsLoading(false)
     } catch (error) {
-      console.error('Error loading saved posts:', error)
+      console.error('Error loading dashboard data:', error)
       setIsLoading(false)
     }
   }
