@@ -6,7 +6,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronDown, BarChart3, Clock, CheckCircle2, MoreVertical } from 'lucide-react'
+import { ChevronDown, BarChart3, Clock, CheckCircle2, MoreVertical, Edit3, RotateCcw } from 'lucide-react'
 import { DashboardService } from '@/lib/dashboard/dashboard-service'
 import { SaveService } from '@/lib/dashboard/save-service'
 import { DashboardStats, WorkItem } from '@/types/dashboard'
@@ -95,11 +95,22 @@ export default function DashboardPage() {
         SaveService.getSavedPostsAsWorkItems(user) // Pass user directly to avoid auth timeout
       ])
       
+      // For testing: If no saved posts exist, create mock posts
+      if (workItems.length === 0 && typeof window !== 'undefined') {
+        console.log('🎭 Dashboard: No saved posts found, creating mock posts for testing')
+        SaveService.createMockSavedPosts()
+        // Reload the work items after creating mock posts
+        const mockWorkItems = await SaveService.getSavedPostsAsWorkItems(user)
+        setWorkItems(mockWorkItems)
+        console.log('🎭 Dashboard: Mock posts created, loaded', mockWorkItems.length, 'items')
+      } else {
+        setWorkItems(workItems)
+      }
+      
       console.log('📊📊📊 Dashboard: Loaded dashboard stats:', dashboardStats)
-      console.log('📊📊📊 Dashboard: Loaded work items:', workItems.length)
+      console.log('📊📊📊 Dashboard: Final work items count:', workItems.length)
       
       setStats(dashboardStats)
-      setWorkItems(workItems)
       
       setIsLoading(false)
     } catch (error) {
@@ -110,24 +121,28 @@ export default function DashboardPage() {
 
   const hasWorkItems = workItems.length > 0
 
+  // Helper function to navigate back to wizard with saved settings
+  const handleBackToWizard = (item: WorkItem) => {
+    if (item.wizardSettings) {
+      // Store settings in sessionStorage for the wizard to pick up
+      sessionStorage.setItem('wizardSettings', JSON.stringify(item.wizardSettings))
+      sessionStorage.setItem('originalPostId', item.id)
+    }
+    window.location.href = '/workspace/linkedin'
+  }
+
+  // Helper function to navigate to editor
+  const handleEditRefine = (item: WorkItem) => {
+    window.location.href = `/workspace/editor?postId=${item.id}`
+  }
+
   return (
     <div className="h-full p-8">
       <div className="max-w-7xl mx-auto">
         {/* Page Header - matches design reference */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-1">Your dashboard</h1>
-            <p className="text-gray-500 text-base">Track your content progress and access your tools • henninghammertorp@gmail.com</p>
-          </div>
-          
-          {/* Tools Dropdown - matches design reference orange button */}
-          <div className="relative">
-            <button className="inline-flex items-center px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-colors duration-150">
-              <span className="mr-2">🔧</span>
-              Tools
-              <ChevronDown className="ml-2 w-4 h-4" />
-            </button>
-          </div>
+        <div className="mb-6">
+          <h1 className="text-4xl font-bold text-gray-900 mb-1">Your dashboard</h1>
+          <p className="text-gray-500 text-base">Track your content progress and access your tools • henninghammertorp@gmail.com</p>
         </div>
 
         {/* Metrics Cards */}
@@ -322,12 +337,30 @@ export default function DashboardPage() {
                         {item.lastEdited}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button 
-                          className="text-gray-400 hover:text-gray-600 transition-colors duration-150"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-end space-x-2">
+                          <button 
+                            className="inline-flex items-center px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-medium rounded-md transition-colors duration-150"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleEditRefine(item)
+                            }}
+                            title="Edit & Refine"
+                          >
+                            <Edit3 className="w-3 h-3 mr-1" />
+                            Edit & Refine
+                          </button>
+                          <button 
+                            className="inline-flex items-center px-3 py-1.5 border border-gray-300 hover:border-gray-400 text-gray-700 hover:text-gray-900 text-xs font-medium rounded-md transition-colors duration-150"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleBackToWizard(item)
+                            }}
+                            title="Back to Wizard"
+                          >
+                            <RotateCcw className="w-3 h-3 mr-1" />
+                            Back to Wizard
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     )
