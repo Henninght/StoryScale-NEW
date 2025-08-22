@@ -2,7 +2,7 @@
  * LinkedIn AI Content System - Enterprise JavaScript Implementation
  * Production-ready LinkedIn content generation system
  * 
- * @version 2.0.0
+ * @version 3.0.0
  * @description Professional LinkedIn content generation system
  * @author AI Content System Team
  */
@@ -689,7 +689,7 @@ Write the LinkedIn post now, following all specifications above:`;
       audienceStrategy: audienceGuide,
       hashtagCount: validatedParams.includeHashtags ? '3-5' : '0',
       generatedAt: new Date().toISOString(),
-      version: '2.0.0'
+      version: '3.0.0'
     }
   };
 }
