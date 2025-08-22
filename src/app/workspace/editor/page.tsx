@@ -72,9 +72,27 @@ function EditorContent() {
             validateContent(savedPost.content || '')
           } else {
             console.log('📝 EDITOR: No saved post found for ID:', postId, 'even after creating mock posts')
+            // Set empty content when post is not found
+            setContent('Start editing your content here...')
+            setCurrentPost(null)
+            // Add initial version to history
+            setVersionHistory([{
+              id: `v1-${Date.now()}`,
+              content: 'Start editing your content here...',
+              timestamp: new Date(),
+            }])
           }
         } catch (error) {
           console.error('📝 EDITOR: Failed to load saved post:', error)
+          // Set fallback content when there's an error
+          setContent('Error loading post. Start editing your content here...')
+          setCurrentPost(null)
+          // Add initial version to history
+          setVersionHistory([{
+            id: `v1-${Date.now()}`,
+            content: 'Error loading post. Start editing your content here...',
+            timestamp: new Date(),
+          }])
         } finally {
           setIsLoading(false)
         }
