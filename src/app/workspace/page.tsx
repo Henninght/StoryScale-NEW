@@ -127,6 +127,10 @@ export default function DashboardPage() {
       // Store settings in sessionStorage for the wizard to pick up
       sessionStorage.setItem('wizardSettings', JSON.stringify(item.wizardSettings))
       sessionStorage.setItem('originalPostId', item.id)
+    } else {
+      // No saved settings, just clear any existing ones
+      sessionStorage.removeItem('wizardSettings')
+      sessionStorage.removeItem('originalPostId')
     }
     window.location.href = '/workspace/linkedin'
   }
@@ -337,7 +341,7 @@ export default function DashboardPage() {
                         {item.lastEdited}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="flex items-center justify-end space-x-2">
+                        <div className="flex items-center justify-end">
                           <button 
                             className="inline-flex items-center px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-medium rounded-md transition-colors duration-150"
                             onClick={(e) => {
@@ -348,17 +352,6 @@ export default function DashboardPage() {
                           >
                             <Edit3 className="w-3 h-3 mr-1" />
                             Edit & Refine
-                          </button>
-                          <button 
-                            className="inline-flex items-center px-3 py-1.5 border border-gray-300 hover:border-gray-400 text-gray-700 hover:text-gray-900 text-xs font-medium rounded-md transition-colors duration-150"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleBackToWizard(item)
-                            }}
-                            title="Back to Wizard"
-                          >
-                            <RotateCcw className="w-3 h-3 mr-1" />
-                            Back to Wizard
                           </button>
                         </div>
                       </td>

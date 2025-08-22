@@ -23,6 +23,17 @@ export interface SavedPost {
     processingTime: number
     qualityScore?: number
   }
+  wizardSettings?: {
+    purpose?: string
+    audience?: string
+    tone?: string
+    format?: string
+    length?: string
+    enableResearch?: boolean
+    outputLanguage?: 'en' | 'no'
+    description?: string
+    [key: string]: any
+  }
 }
 
 export class SaveService {
@@ -50,6 +61,17 @@ export class SaveService {
       purpose?: string
       target?: string
       userId?: string
+      wizardSettings?: {
+        purpose?: string
+        audience?: string
+        tone?: string
+        format?: string
+        length?: string
+        enableResearch?: boolean
+        outputLanguage?: 'en' | 'no'
+        description?: string
+        [key: string]: any
+      }
     }
   ): Promise<{ success: boolean; error?: string; postId?: string }> {
     try {
@@ -73,7 +95,8 @@ export class SaveService {
         status: 'Draft',
         createdAt: new Date(),
         lastEdited: new Date(),
-        metadata
+        metadata,
+        wizardSettings: options?.wizardSettings
       }
 
       if (options?.userId) {
@@ -136,7 +159,8 @@ export class SaveService {
         generation_model: post.metadata.modelUsed,
         processing_time_ms: post.metadata.processingTime,
         ai_confidence: post.metadata.qualityScore || 0.8,
-        emoji: '📝' // Default emoji, can be improved later
+        emoji: '📝', // Default emoji, can be improved later
+        wizard_settings: post.wizardSettings || null
       }
 
       const { error } = await supabaseClient
@@ -223,26 +247,29 @@ export class SaveService {
   }
 
   /**
-   * Get current authenticated user
+   * Get current authenticated user - optimized to avoid logout issues
    */
   private static async getCurrentUser() {
     try {
       console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Starting auth check')
-      console.log('👤👤👤 SAVE SERVICE: supabaseClient exists:', !!supabaseClient)
-      console.log('👤👤👤 SAVE SERVICE: supabaseClient.auth exists:', !!supabaseClient?.auth)
       
       if (!supabaseClient) {
         console.error('👤👤👤 SAVE SERVICE: Supabase client is null - environment variables missing?')
         return null
       }
       
-      const { data: { user }, error } = await supabaseClient.auth.getUser()
-      console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Got response, error:', !!error)
-      console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Got user:', !!user)
+      // Use getSession instead of getUser to avoid unnecessary network requests
+      // and potential session invalidation
+      const { data: { session }, error } = await supabaseClient.auth.getSession()
+      console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Got session response, error:', !!error)
+      console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Got session:', !!session)
+      
       if (error) {
-        console.error('👤👤👤 SAVE SERVICE: Get user error:', error)
+        console.error('👤👤👤 SAVE SERVICE: Get session error:', error)
         return null
       }
+      
+      const user = session?.user || null
       console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Returning user:', user ? 'authenticated' : 'null')
       return user
     } catch (error) {
@@ -264,30 +291,21 @@ export class SaveService {
         return []
       }
 
-      // Always check authentication first - REMOVED the problematic fast check
-      console.log('📥📥📥 SAVE SERVICE: Checking current user with timeout...')
-      console.log('📥📥📥 SAVE SERVICE: Environment check - URL:', process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 20) + '...')
-      console.log('📥📥📥 SAVE SERVICE: Environment check - Key present:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+      // Check authentication with improved error handling to prevent logout issues
+      console.log('📥📥📥 SAVE SERVICE: Checking current user...')
       
       const startTime = Date.now()
       let user = null
       
       try {
-        // Increased timeout for better reliability
-        const userPromise = this.getCurrentUser()
-        const timeoutPromise = new Promise<null>((resolve) => 
-          setTimeout(() => {
-            console.log('📥📥📥 SAVE SERVICE: Auth check timeout, assuming guest mode')
-            resolve(null)
-          }, 3000) // Increased from 1s to 3s
-        )
-        user = await Promise.race([userPromise, timeoutPromise])
+        // Removed aggressive timeout to prevent session conflicts
+        user = await this.getCurrentUser()
         const elapsed = Date.now() - startTime
         console.log('📥📥📥 SAVE SERVICE: User check result:', user ? `authenticated (${user.email})` : 'guest', `(took ${elapsed}ms)`)
         console.log('📥📥📥 SAVE SERVICE: User ID:', user?.id || 'none')
       } catch (authError) {
         const elapsed = Date.now() - startTime
-        console.log('📥📥📥 SAVE SERVICE: Auth check failed, defaulting to guest mode:', authError.message, `(took ${elapsed}ms)`)
+        console.log('📥📥📥 SAVE SERVICE: Auth check failed, defaulting to guest mode:', authError, `(took ${elapsed}ms)`)
         user = null
       }
 
@@ -358,20 +376,13 @@ export class SaveService {
       console.log('🗃️🗃️🗃️ SAVE SERVICE: getSavedPostsFromDatabase called for user:', userId)
       console.log('🗃️🗃️🗃️ SAVE SERVICE: About to query documents table...')
       
-      // Add timeout to prevent hanging queries
-      const queryPromise = supabaseClient
+      // Query database without aggressive timeout to prevent session issues
+      const { data: documents, error } = await supabaseClient
         .from('documents')
         .select('*')
         .eq('user_id', userId)
         .eq('type', 'linkedin')
         .order('created_at', { ascending: false })
-
-      const timeoutPromise = new Promise<{ data: null; error: Error }>((_, reject) =>
-        setTimeout(() => reject(new Error('Database query timeout')), 5000)
-      )
-
-      const result = await Promise.race([queryPromise, timeoutPromise])
-      const { data: documents, error } = result
 
       console.log('🗃️🗃️🗃️ SAVE SERVICE: Database query completed')
       console.log('🗃️🗃️🗃️ SAVE SERVICE: Error:', error)
@@ -400,7 +411,8 @@ export class SaveService {
           modelUsed: doc.generation_model || 'unknown',
           processingTime: doc.processing_time_ms || 0,
           qualityScore: doc.ai_confidence || 0.8
-        }
+        },
+        wizardSettings: doc.wizard_settings || undefined
       }))
     } catch (error) {
       console.error('Get posts from database error:', error)
@@ -473,8 +485,12 @@ export class SaveService {
    * Get a specific saved post by ID
    */
   static async getSavedPost(postId: string): Promise<SavedPost | null> {
+    console.log('🔍 getSavedPost: Looking for post with ID:', postId)
     const posts = await this.getSavedPosts()
-    return posts.find(post => post.id === postId) || null
+    console.log('🔍 getSavedPost: Available posts:', posts.map(p => ({ id: p.id, title: p.title, hasContent: !!p.content })))
+    const foundPost = posts.find(post => post.id === postId)
+    console.log('🔍 getSavedPost: Found post:', foundPost ? { id: foundPost.id, title: foundPost.title, hasContent: !!foundPost.content, contentLength: foundPost.content?.length } : 'NOT FOUND')
+    return foundPost || null
   }
 
   /**
@@ -619,6 +635,8 @@ export class SaveService {
       purpose: post.purpose,
       status: post.status,
       lastEdited: this.formatTimeAgo(post.lastEdited),
+      content: post.content,
+      wizardSettings: post.wizardSettings,
       actions: {
         edit: true,
         delete: true,
@@ -747,5 +765,140 @@ export class SaveService {
     this.cachedUserId = null
     this.cacheTimestamp = 0
     console.log('🗑️🗑️🗑️ SAVE SERVICE: Cache cleared, forcing fresh auth check')
+  }
+
+  /**
+   * Create mock saved posts for testing (development only)
+   */
+  static createMockSavedPosts(): void {
+    if (typeof window === 'undefined') return
+    
+    console.log('🎭 MOCK: Creating mock saved posts...')
+    
+    // Clear existing posts first
+    localStorage.removeItem(this.STORAGE_KEY)
+    
+    const mockPosts: SavedPost[] = [
+      {
+        id: '1',
+        title: 'When OpenAI\'s CEO Sam Altman says...',
+        content: `When OpenAI's CEO Sam Altman says "AGI could be achieved within the next few years," it's not just a prediction—it's a roadmap.
+
+Here's what this means for professionals:
+
+🧠 **The Skills Revolution**
+• Critical thinking becomes more valuable than memorization
+• Human creativity and empathy can't be automated
+• Continuous learning isn't optional—it's survival
+
+💼 **Industry Transformation**
+• Legal: AI will draft contracts, lawyers will focus on strategy
+• Healthcare: AI will diagnose, doctors will focus on patient care
+• Education: AI will personalize learning, teachers will mentor and inspire
+
+🤖 **The Partnership Model**
+Stop thinking "AI vs Humans"
+Start thinking "AI + Humans = Exponential Results"
+
+The question isn't whether AGI will change your industry.
+The question is: Will you be ready to lead that change?
+
+What's your take? How are you preparing for this shift?
+
+#AI #Leadership #FutureOfWork #AGI #Innovation`,
+        purpose: 'Thought Leadership',
+        target: 'Professionals',
+        status: 'Draft',
+        createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
+        lastEdited: new Date(Date.now() - 4 * 60 * 60 * 1000),
+        metadata: {
+          characterCount: 1024,
+          wordCount: 156,
+          hashtagCount: 5,
+          modelUsed: 'claude-3-5-sonnet',
+          processingTime: 3500,
+          qualityScore: 0.92
+        },
+        wizardSettings: {
+          purpose: 'share-insights',
+          description: 'Discussing AGI implications for professionals',
+          audience: 'professionals',
+          tone: 'professional',
+          format: 'modern',
+          length: 'medium',
+          outputLanguage: 'en',
+          enableResearch: true
+        }
+      },
+      {
+        id: '2',
+        title: '🤖 The AI revolution isn\'t just coming...',
+        content: `🤖 The AI revolution isn't just coming—it's here.
+
+And it's changing how we think about productivity forever.
+
+I just spent 15 minutes with Claude to:
+✅ Draft a complete project proposal
+✅ Create a content calendar for next month
+✅ Write 5 different email templates
+✅ Generate ideas for team building activities
+
+Tasks that used to take me hours now take minutes.
+
+But here's the thing most people miss:
+
+AI doesn't replace good thinking.
+It amplifies it.
+
+The professionals who thrive in the next decade won't be those who avoid AI.
+
+They'll be those who learn to think WITH it.
+
+What's one task you could automate today to free up time for higher-level thinking?
+
+#ProductivityTips #AI #WorkSmarter #Leadership #Efficiency`,
+        purpose: 'Value',
+        target: 'Professionals',
+        status: 'Draft',
+        createdAt: new Date(Date.now() - 14 * 60 * 60 * 1000), // 14 hours ago
+        lastEdited: new Date(Date.now() - 14 * 60 * 60 * 1000),
+        metadata: {
+          characterCount: 756,
+          wordCount: 132,
+          hashtagCount: 5,
+          modelUsed: 'claude-3-5-sonnet',
+          processingTime: 2800,
+          qualityScore: 0.88
+        },
+        wizardSettings: {
+          purpose: 'offer-value',
+          description: 'Share AI productivity insights',
+          audience: 'professionals',
+          tone: 'conversational',
+          format: 'modern',
+          length: 'short',
+          outputLanguage: 'en',
+          enableResearch: false
+        }
+      }
+    ]
+
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(mockPosts))
+    console.log('🎭 MOCK: Created mock saved posts for testing')
+    
+    // Clear cache to force fresh load
+    this.cachedPosts = null
+    this.cacheTimestamp = 0
+    
+    // Verify the posts were saved correctly
+    const verification = localStorage.getItem(this.STORAGE_KEY)
+    if (verification) {
+      const parsed = JSON.parse(verification)
+      console.log('🎭 MOCK: Verification - saved', parsed.length, 'posts')
+      console.log('🎭 MOCK: Post 1 content length:', parsed[0]?.content?.length || 0)
+      console.log('🎭 MOCK: Post 2 content length:', parsed[1]?.content?.length || 0)
+    } else {
+      console.error('🎭 MOCK: ERROR - Failed to save posts to localStorage')
+    }
   }
 }

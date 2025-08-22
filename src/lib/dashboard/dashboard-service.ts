@@ -4,6 +4,7 @@
  */
 
 import { DashboardStats, WorkItem } from '@/types/dashboard'
+import { PostLength } from '@/types/wizard'
 
 export class DashboardService {
   
@@ -24,11 +25,33 @@ export class DashboardService {
   }
 
   /**
-   * Calculate time saved based on average generation time
-   * Reference: 51 minutes average per post saved
+   * Time savings mapping for different post lengths
+   * Based on typical time to manually create content
    */
-  static calculateTimeSaved(postCount: number): { hours: number; minutes: number } {
-    const totalMinutes = postCount * 51 // 51 min average per post
+  static readonly TIME_SAVINGS_MAP = {
+    short: 25,   // 25 minutes for short posts (quick thoughts, simple updates)
+    medium: 45,  // 45 minutes for medium posts (standard LinkedIn posts)
+    long: 75     // 75 minutes for long posts (detailed articles, storytelling)
+  } as const
+
+  /**
+   * Calculate time saved based on post lengths
+   * @param posts Array of work items with post lengths, or just a count for backward compatibility
+   */
+  static calculateTimeSaved(posts: WorkItem[] | number): { hours: number; minutes: number } {
+    let totalMinutes = 0
+    
+    if (typeof posts === 'number') {
+      // Backward compatibility: assume all posts are medium length
+      totalMinutes = posts * this.TIME_SAVINGS_MAP.medium
+    } else {
+      // Calculate based on actual post lengths
+      totalMinutes = posts.reduce((total, post) => {
+        const postLength = post.postLength || 'medium' // Default to medium if not specified
+        return total + this.TIME_SAVINGS_MAP[postLength]
+      }, 0)
+    }
+    
     const hours = Math.floor(totalMinutes / 60)
     const minutes = totalMinutes % 60
     
@@ -39,9 +62,11 @@ export class DashboardService {
    * Mock dashboard statistics - matches design reference data
    */
   private static getMockDashboardStats(): DashboardStats {
+    const mockPosts = this.getMockWorkItems()
+    
     return {
-      totalPosts: 7,
-      timeSaved: this.calculateTimeSaved(7),
+      totalPosts: mockPosts.length,
+      timeSaved: this.calculateTimeSaved(mockPosts),
       completionRate: 70, // 70% completion rate
       postTypes: {
         thoughtLeadership: 60, // 60%
@@ -82,7 +107,8 @@ export class DashboardService {
         target: 'General',
         purpose: 'Thought Leadership',
         status: 'Published',
-        lastEdited: '4h ago'
+        lastEdited: '4h ago',
+        postLength: 'long'
       },
       {
         id: '2', 
@@ -90,7 +116,8 @@ export class DashboardService {
         target: 'General',
         purpose: 'Question',
         status: 'Draft',
-        lastEdited: '13h ago'
+        lastEdited: '13h ago',
+        postLength: 'short'
       },
       {
         id: '3',
@@ -98,7 +125,8 @@ export class DashboardService {
         target: 'General',
         purpose: 'Thought Leadership',
         status: 'Draft', 
-        lastEdited: '14h ago'
+        lastEdited: '14h ago',
+        postLength: 'medium'
       },
       {
         id: '4',
@@ -106,7 +134,8 @@ export class DashboardService {
         target: 'Professionals',
         purpose: 'Value',
         status: 'Draft',
-        lastEdited: '14h ago'
+        lastEdited: '14h ago',
+        postLength: 'long'
       },
       {
         id: '5',
@@ -114,7 +143,8 @@ export class DashboardService {
         target: 'Developers', 
         purpose: 'Authority',
         status: 'Draft',
-        lastEdited: '15h ago'
+        lastEdited: '15h ago',
+        postLength: 'medium'
       }
     ]
   }

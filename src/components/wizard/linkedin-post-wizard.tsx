@@ -40,15 +40,31 @@ export function LinkedInPostWizard({ onComplete, onCancel }: LinkedInPostWizardP
     validateStep,
     getCompletionPercentage,
     isStepCompleted,
-    applySmartDefaults
+    applySmartDefaults,
+    loadFromSettings
   } = useWizardStore()
 
   // Handle hydration and initialize wizard on mount
   useEffect(() => {
     setIsHydrated(true)
     initializeWizard()
+    
+    // Check for saved wizard settings from dashboard
+    const savedSettings = sessionStorage.getItem('wizardSettings')
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings)
+        console.log('🔄 Loading saved wizard settings:', settings)
+        loadFromSettings(settings)
+        // Clear the session storage after loading
+        sessionStorage.removeItem('wizardSettings')
+      } catch (error) {
+        console.error('Failed to load saved wizard settings:', error)
+      }
+    }
+    
     // Don't apply smart defaults on mount - let user make their own selections
-  }, [initializeWizard])
+  }, [initializeWizard, loadFromSettings])
 
   // Handle content generation completion
   useEffect(() => {

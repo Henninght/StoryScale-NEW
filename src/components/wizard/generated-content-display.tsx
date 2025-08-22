@@ -79,7 +79,17 @@ export function GeneratedContentDisplay() {
         {
           purpose: data.step1.purpose || 'General',
           target: data.step2.audience || 'Professionals',
-          userId: user?.id
+          userId: user?.id,
+          wizardSettings: {
+            purpose: data.step1.purpose,
+            description: data.step1.description,
+            audience: data.step2.audience,
+            tone: data.step2.tone,
+            format: data.step2.format,
+            length: data.step2.postLength,
+            outputLanguage: data.step3.language,
+            enableResearch: data.step3.enableResearch
+          }
         }
       )
 

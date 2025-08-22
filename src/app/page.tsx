@@ -1,22 +1,19 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function Home() {
-  const router = useRouter()
-
-  useEffect(() => {
-    // Redirect to workspace immediately
-    router.replace('/workspace')
-  }, [router])
-
-  // Show loading spinner while redirecting
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-gray-600">Redirecting to workspace...</p>
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">StoryScale</h1>
+        <p className="text-gray-600 mb-8">AI-powered content creation for LinkedIn</p>
+        <Link 
+          href="/workspace"
+          className="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-150"
+        >
+          Go to Workspace
+        </Link>
       </div>
     </div>
   );

@@ -35,15 +35,32 @@ function EditorContent() {
   useEffect(() => {
     const loadPost = async () => {
       const postId = searchParams.get('postId')
+      console.log('📝 EDITOR: useEffect triggered with postId:', postId, 'draftId:', draftId, 'title:', title)
       
       if (postId) {
         // Load saved post from SaveService
+        console.log('📝 EDITOR: Loading post with ID:', postId)
         setIsLoading(true)
         try {
-          const savedPost = await SaveService.getSavedPost(postId)
+          // First try to get the post
+          let savedPost = await SaveService.getSavedPost(postId)
+          console.log('📝 EDITOR: Retrieved saved post:', savedPost)
+          
+          // If no post found and we're looking for ID '1' or '2', create mock posts
+          if (!savedPost && (postId === '1' || postId === '2')) {
+            console.log('📝 EDITOR: Creating mock posts and retrying...')
+            SaveService.createMockSavedPosts()
+            // Clear cache and retry
+            await SaveService.clearCache()
+            savedPost = await SaveService.getSavedPost(postId)
+            console.log('📝 EDITOR: Retry result:', savedPost)
+          }
+          
           if (savedPost) {
+            console.log('📝 EDITOR: Setting content length:', savedPost.content?.length, 'content preview:', savedPost.content?.substring(0, 100))
             setCurrentPost(savedPost)
             setContent(savedPost.content || '')
+            console.log('📝 EDITOR: Content state updated to:', savedPost.content?.length, 'characters')
             // Add initial version to history
             setVersionHistory([{
               id: `v1-${Date.now()}`,
@@ -53,14 +70,17 @@ function EditorContent() {
             }])
             // Initial quality validation
             validateContent(savedPost.content || '')
+          } else {
+            console.log('📝 EDITOR: No saved post found for ID:', postId, 'even after creating mock posts')
           }
         } catch (error) {
-          console.error('Failed to load saved post:', error)
+          console.error('📝 EDITOR: Failed to load saved post:', error)
         } finally {
           setIsLoading(false)
         }
       } else if (draftId && title) {
         // Fallback for old URL format
+        console.log('📝 EDITOR: Using fallback with draftId:', draftId, 'title:', title)
         const draftContent = getDraftContent(draftId, title)
         setContent(draftContent)
         // Add initial version to history
@@ -71,6 +91,9 @@ function EditorContent() {
         }])
         // Initial quality validation
         validateContent(draftContent)
+      } else {
+        console.log('📝 EDITOR: No postId, draftId, or title found')
+        setIsLoading(false)
       }
     }
     
@@ -225,9 +248,9 @@ function EditorContent() {
   }
 
   return (
-    <div className="h-full flex">
+    <div className="h-screen flex">
       {/* Configuration Sidebar - 380px as per design reference */}
-      <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
+      <div className="w-96 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
         {/* Sidebar Header */}
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-medium text-gray-900">Configuration</h2>
@@ -397,7 +420,7 @@ function EditorContent() {
       </div>
 
       {/* Content Editor Area */}
-      <div className="flex-1 flex flex-col bg-gray-50">
+      <div className="flex-1 flex flex-col bg-gray-50 min-w-0">
         {/* Editor Header */}
         <div className="px-6 py-4 bg-white border-b border-gray-200">
           <div className="flex items-center justify-between">

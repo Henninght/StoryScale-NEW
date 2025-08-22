@@ -56,7 +56,13 @@
       "Bash(PORT=3000 npm run dev)",
       "Bash(open http://localhost:3001/wizard)",
       "Bash(npm run typecheck:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(for port in {3000..3009})",
+      "Bash(do lsof:*)",
+      "Bash(echo:*)",
+      "Bash(done)",
+      "Bash(npm cache clean:*)",
+      "mcp__supabase__execute_sql"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

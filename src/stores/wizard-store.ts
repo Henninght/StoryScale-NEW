@@ -66,6 +66,7 @@ interface WizardState {
   generateContent: () => Promise<void>
   saveProgress: () => void
   loadProgress: (sessionId: string) => void
+  loadFromSettings: (settings: any) => void
 
   // Utility
   applySmartDefaults: () => void
@@ -635,6 +636,52 @@ export const useWizardStore = create<WizardState>()(
             isGenerating: state.isGenerating,
             error: state.error,
             generatedContent: state.generatedContent ? 'exists' : 'null'
+          })
+        },
+
+        loadFromSettings: (settings) => {
+          console.log('🔄 Loading wizard from saved settings:', settings)
+          
+          set((state) => {
+            const newData = { ...state.data }
+            
+            // Map saved settings to wizard data structure
+            if (settings.purpose) {
+              newData.step1.purpose = settings.purpose
+            }
+            if (settings.goal) {
+              newData.step1.goal = settings.goal
+            }
+            if (settings.description) {
+              newData.step1.description = settings.description
+            }
+            if (settings.audience) {
+              newData.step2.audience = settings.audience
+            }
+            if (settings.tone) {
+              newData.step2.tone = settings.tone
+            }
+            if (settings.format) {
+              newData.step2.format = settings.format
+            }
+            if (settings.length) {
+              newData.step2.postLength = settings.length
+            }
+            if (settings.outputLanguage) {
+              newData.step3.language = settings.outputLanguage
+            }
+            if (settings.enableResearch !== undefined) {
+              newData.step3.enableResearch = settings.enableResearch
+            }
+            
+            console.log('🔄 Applied settings to wizard data:', newData)
+            
+            return {
+              ...state,
+              data: newData,
+              error: null,
+              generatedContent: null // Clear any existing generated content
+            }
           })
         }
       }),

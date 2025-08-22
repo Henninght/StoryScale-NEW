@@ -74,20 +74,39 @@ export function useAuth() {
         }
       }
       
-      const user = await AuthService.getCurrentUser()
+      // Add timeout to prevent hanging on auth check
+      const userPromise = AuthService.getCurrentUser()
+      const timeoutPromise = new Promise<null>((resolve) => 
+        setTimeout(() => {
+          console.log('🔐 useAuth: Auth check timeout, assuming no user')
+          resolve(null)
+        }, 2000) // 2 second timeout
+      )
+      
+      const user = await Promise.race([userPromise, timeoutPromise])
       console.log('🔐 useAuth: Got user:', user?.email || 'none')
       
       if (user) {
         console.log('🔐 useAuth: User exists, getting profile...')
-        const profile = await AuthService.getUserProfile(user.id)
-        console.log('🔐 useAuth: Got profile:', profile?.full_name || 'none')
-        
-        setState({
-          user,
-          profile,
-          isLoading: false,
-          isAuthenticated: true
-        })
+        try {
+          const profile = await AuthService.getUserProfile(user.id)
+          console.log('🔐 useAuth: Got profile:', profile?.full_name || 'none')
+          
+          setState({
+            user,
+            profile,
+            isLoading: false,
+            isAuthenticated: true
+          })
+        } catch (profileError) {
+          console.error('🔐 useAuth: Profile fetch error, continuing with user only:', profileError)
+          setState({
+            user,
+            profile: null,
+            isLoading: false,
+            isAuthenticated: true
+          })
+        }
       } else {
         console.log('🔐 useAuth: No user found, setting unauthenticated state')
         setState({
@@ -99,11 +118,12 @@ export function useAuth() {
       }
     } catch (error) {
       console.error('🔐 useAuth: Initialize auth error:', error)
-      setState(prev => ({
-        ...prev,
+      setState({
+        user: null,
+        profile: null,
         isLoading: false,
         isAuthenticated: false
-      }))
+      })
     }
   }
 

@@ -57,18 +57,20 @@ export class AuthService {
   }
 
   /**
-   * Get current user
+   * Get current user - optimized to prevent session invalidation
    */
   static async getCurrentUser(): Promise<User | null> {
     try {
-      const { data: { user }, error } = await supabaseClient.auth.getUser()
+      // Use getSession instead of getUser to avoid unnecessary network calls
+      // that might invalidate the current session
+      const { data: { session }, error } = await supabaseClient.auth.getSession()
       
       if (error) {
-        console.error('Get user error:', error)
+        console.error('Get session error:', error)
         return null
       }
       
-      return user
+      return session?.user || null
     } catch (error) {
       console.error('Get current user error:', error)
       return null
