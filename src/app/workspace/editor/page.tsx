@@ -11,6 +11,7 @@ import { useSearchParams } from 'next/navigation'
 import { validateFunction, QualityScore } from '@/lib/functions/validate-function'
 import { LanguageAwareContentRequest, SupportedLanguage } from '@/lib/types/language-aware-request'
 import { SaveService } from '@/lib/dashboard/save-service'
+import { useAuth } from '@/hooks/use-auth'
 
 // Fallback function for old draft format
 function getDraftContent(draftId: string, title: string): string {
@@ -22,6 +23,7 @@ function EditorContent() {
   const searchParams = useSearchParams()
   const draftId = searchParams.get('draft')
   const title = searchParams.get('title')
+  const { user, isAuthenticated } = useAuth() // Get auth state to pass to SaveService
   const [content, setContent] = useState('')
   const [qualityScore, setQualityScore] = useState<QualityScore | null>(null)
   const [isValidating, setIsValidating] = useState(false)
@@ -30,7 +32,9 @@ function EditorContent() {
   const [versionHistory, setVersionHistory] = useState<Array<{id: string, content: string, timestamp: Date, qualityScore?: number}>>([])  
   const [currentPost, setCurrentPost] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingError, setLoadingError] = useState<string | null>(null)
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     const loadPost = async () => {
@@ -41,9 +45,18 @@ function EditorContent() {
         // Load saved post from SaveService
         console.log('📝 EDITOR: Loading post with ID:', postId)
         setIsLoading(true)
+        setLoadingError(null)
+        
+        // Set loading timeout to prevent infinite loading
+        loadingTimeoutRef.current = setTimeout(() => {
+          console.error('📝 EDITOR: Loading timeout after 10 seconds')
+          setLoadingError('Loading timeout. Please try refreshing the page.')
+          setIsLoading(false)
+        }, 10000) // 10 second timeout
+        
         try {
-          // First try to get the post
-          let savedPost = await SaveService.getSavedPost(postId)
+          // First try to get the post (pass user to avoid auth conflicts)
+          let savedPost = await SaveService.getSavedPost(postId, user)
           console.log('📝 EDITOR: Retrieved saved post:', savedPost)
           
           // If no post found and we're looking for ID '1' or '2', create mock posts
@@ -52,7 +65,7 @@ function EditorContent() {
             SaveService.createMockSavedPosts()
             // Clear cache and retry
             await SaveService.clearCache()
-            savedPost = await SaveService.getSavedPost(postId)
+            savedPost = await SaveService.getSavedPost(postId, user)
             console.log('📝 EDITOR: Retry result:', savedPost)
           }
           
@@ -61,6 +74,13 @@ function EditorContent() {
             setCurrentPost(savedPost)
             setContent(savedPost.content || '')
             console.log('📝 EDITOR: Content state updated to:', savedPost.content?.length, 'characters')
+            
+            // Clear loading timeout on successful load
+            if (loadingTimeoutRef.current) {
+              clearTimeout(loadingTimeoutRef.current)
+              loadingTimeoutRef.current = null
+            }
+            
             // Add initial version to history
             setVersionHistory([{
               id: `v1-${Date.now()}`,
@@ -84,6 +104,16 @@ function EditorContent() {
           }
         } catch (error) {
           console.error('📝 EDITOR: Failed to load saved post:', error)
+          // Set specific error message based on error type
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+          if (errorMessage.includes('auth') || errorMessage.includes('user') || errorMessage.includes('session')) {
+            setLoadingError('Authentication error. Please sign in again.')
+          } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+            setLoadingError('Network error. Please check your connection and try again.')
+          } else {
+            setLoadingError('Failed to load post. Please try again or refresh the page.')
+          }
+          
           // Set fallback content when there's an error
           setContent('Error loading post. Start editing your content here...')
           setCurrentPost(null)
@@ -94,6 +124,11 @@ function EditorContent() {
             timestamp: new Date(),
           }])
         } finally {
+          // Clear loading timeout
+          if (loadingTimeoutRef.current) {
+            clearTimeout(loadingTimeoutRef.current)
+            loadingTimeoutRef.current = null
+          }
           setIsLoading(false)
         }
       } else if (draftId && title) {
@@ -116,7 +151,14 @@ function EditorContent() {
     }
     
     loadPost()
-  }, [draftId, title, searchParams])
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current)
+      }
+    }
+  }, [draftId, title, searchParams, user]) // Include user to re-run when auth changes
 
   // Debounced validation function
   const validateContent = useCallback(async (text: string) => {
@@ -263,6 +305,10 @@ function EditorContent() {
   
   if (isLoading) {
     return <EditorLoading />
+  }
+
+  if (loadingError) {
+    return <EditorError error={loadingError} onRetry={() => window.location.reload()} />
   }
 
   return (
@@ -504,6 +550,40 @@ function EditorLoading() {
       </div>
       <div className="flex-1 bg-gray-50 flex items-center justify-center">
         <div className="text-gray-500">Loading editor...</div>
+      </div>
+    </div>
+  )
+}
+
+// Error fallback component
+function EditorError({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <div className="h-full flex">
+      <div className="w-96 bg-white border-r border-gray-200"></div>
+      <div className="flex-1 bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="text-red-500 text-xl mb-4">⚠️</div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">
+            Failed to Load Editor
+          </h2>
+          <p className="text-gray-600 mb-4">
+            {error}
+          </p>
+          <div className="space-x-3">
+            <button
+              onClick={onRetry}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => window.history.back()}
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+            >
+              Go Back
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

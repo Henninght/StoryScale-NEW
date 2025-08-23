@@ -247,11 +247,12 @@ export class SaveService {
   }
 
   /**
-   * Get current authenticated user - optimized to avoid logout issues
+   * Get current authenticated user - DEPRECATED: Use passed user object instead
+   * Only use this as a fallback when no user is provided
    */
-  private static async getCurrentUser() {
+  private static async getCurrentUserFallback() {
     try {
-      console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Starting auth check')
+      console.log('👤👤👤 SAVE SERVICE: getCurrentUserFallback - Starting fallback auth check')
       
       if (!supabaseClient) {
         console.error('👤👤👤 SAVE SERVICE: Supabase client is null - environment variables missing?')
@@ -261,8 +262,8 @@ export class SaveService {
       // Use getSession instead of getUser to avoid unnecessary network requests
       // and potential session invalidation
       const { data: { session }, error } = await supabaseClient.auth.getSession()
-      console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Got session response, error:', !!error)
-      console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Got session:', !!session)
+      console.log('👤👤👤 SAVE SERVICE: getCurrentUserFallback - Got session response, error:', !!error)
+      console.log('👤👤👤 SAVE SERVICE: getCurrentUserFallback - Got session:', !!session)
       
       if (error) {
         console.error('👤👤👤 SAVE SERVICE: Get session error:', error)
@@ -270,20 +271,21 @@ export class SaveService {
       }
       
       const user = session?.user || null
-      console.log('👤👤👤 SAVE SERVICE: getCurrentUser - Returning user:', user ? 'authenticated' : 'null')
+      console.log('👤👤👤 SAVE SERVICE: getCurrentUserFallback - Returning user:', user ? 'authenticated' : 'null')
       return user
     } catch (error) {
-      console.error('👤👤👤 SAVE SERVICE: Get current user error:', error)
+      console.error('👤👤👤 SAVE SERVICE: Get current user fallback error:', error)
       return null
     }
   }
 
   /**
    * Get all saved posts - from database for authenticated users, localStorage for guests
+   * @param providedUser Optional user object to avoid auth conflicts
    */
-  static async getSavedPosts(): Promise<SavedPost[]> {
+  static async getSavedPosts(providedUser?: any): Promise<SavedPost[]> {
     try {
-      console.log('📥📥📥 SAVE SERVICE: getSavedPosts called')
+      console.log('📥📥📥 SAVE SERVICE: getSavedPosts called with providedUser:', providedUser?.email || 'none')
       
       // Check if we're on the client side
       if (typeof window === 'undefined') {
@@ -291,22 +293,27 @@ export class SaveService {
         return []
       }
 
-      // Check authentication with improved error handling to prevent logout issues
-      console.log('📥📥📥 SAVE SERVICE: Checking current user...')
+      let user = providedUser
       
-      const startTime = Date.now()
-      let user = null
-      
-      try {
-        // Removed aggressive timeout to prevent session conflicts
-        user = await this.getCurrentUser()
-        const elapsed = Date.now() - startTime
-        console.log('📥📥📥 SAVE SERVICE: User check result:', user ? `authenticated (${user.email})` : 'guest', `(took ${elapsed}ms)`)
-        console.log('📥📥📥 SAVE SERVICE: User ID:', user?.id || 'none')
-      } catch (authError) {
-        const elapsed = Date.now() - startTime
-        console.log('📥📥📥 SAVE SERVICE: Auth check failed, defaulting to guest mode:', authError, `(took ${elapsed}ms)`)
-        user = null
+      // Only do fallback auth check if no user provided (avoid auth conflicts)
+      if (!user) {
+        console.log('📥📥📥 SAVE SERVICE: No user provided, checking fallback auth...')
+        
+        const startTime = Date.now()
+        
+        try {
+          // Use fallback auth check only when necessary
+          user = await this.getCurrentUserFallback()
+          const elapsed = Date.now() - startTime
+          console.log('📥📥📥 SAVE SERVICE: Fallback user check result:', user ? `authenticated (${user.email})` : 'guest', `(took ${elapsed}ms)`)
+          console.log('📥📥📥 SAVE SERVICE: User ID:', user?.id || 'none')
+        } catch (authError) {
+          const elapsed = Date.now() - startTime
+          console.log('📥📥📥 SAVE SERVICE: Fallback auth check failed, defaulting to guest mode:', authError, `(took ${elapsed}ms)`)
+          user = null
+        }
+      } else {
+        console.log('📥📥📥 SAVE SERVICE: Using provided user:', user.email, 'ID:', user.id)
       }
 
       // Check cache with user-specific validation
@@ -483,10 +490,12 @@ export class SaveService {
 
   /**
    * Get a specific saved post by ID
+   * @param postId The ID of the post to retrieve
+   * @param providedUser Optional user object to avoid auth conflicts
    */
-  static async getSavedPost(postId: string): Promise<SavedPost | null> {
-    console.log('🔍 getSavedPost: Looking for post with ID:', postId)
-    const posts = await this.getSavedPosts()
+  static async getSavedPost(postId: string, providedUser?: any): Promise<SavedPost | null> {
+    console.log('🔍 getSavedPost: Looking for post with ID:', postId, 'with providedUser:', providedUser?.email || 'none')
+    const posts = await this.getSavedPosts(providedUser)
     console.log('🔍 getSavedPost: Available posts:', posts.map(p => ({ id: p.id, title: p.title, hasContent: !!p.content })))
     const foundPost = posts.find(post => post.id === postId)
     console.log('🔍 getSavedPost: Found post:', foundPost ? { id: foundPost.id, title: foundPost.title, hasContent: !!foundPost.content, contentLength: foundPost.content?.length } : 'NOT FOUND')
@@ -622,10 +631,11 @@ export class SaveService {
 
   /**
    * Convert saved posts to dashboard WorkItem format - with explicit user
+   * @param providedUser Optional user object to avoid auth conflicts
    */
-  static async getSavedPostsAsWorkItems(user?: any): Promise<WorkItem[]> {
-    console.log('🗂️🗂️🗂️ SAVE SERVICE: getSavedPostsAsWorkItems called with user:', user?.email || 'guest')
-    const posts = await this.getSavedPostsWithUser(user)
+  static async getSavedPostsAsWorkItems(providedUser?: any): Promise<WorkItem[]> {
+    console.log('🗂️🗂️🗂️ SAVE SERVICE: getSavedPostsAsWorkItems called with providedUser:', providedUser?.email || 'guest')
+    const posts = await this.getSavedPosts(providedUser) // Use consistent getSavedPosts method
     console.log('🗂️🗂️🗂️ SAVE SERVICE: Got posts for conversion:', posts.length)
     
     const workItems = posts.map(post => ({

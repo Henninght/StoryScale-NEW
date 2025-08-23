@@ -30,15 +30,109 @@ export default function DashboardPage() {
   })
   
   const [workItems, setWorkItems] = useState<WorkItem[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
   console.log('🏠🏠🏠 DASHBOARD: State initialized, workItems count:', workItems.length)
 
-  // Load saved posts on component mount and when returning to page
+  // Load saved posts function
+  const loadSavedPosts = async () => {
+    try {
+      console.log('🔄🔄🔄 Dashboard: Starting loadSavedPosts function')
+      console.log('🔄🔄🔄 Dashboard: Auth state - isLoading:', authLoading, 'user:', user?.email || 'guest')
+      setIsLoading(true)
+      setError(null) // Clear any previous errors
+      
+      // Set loading timeout to prevent infinite loading
+      const timeoutId = setTimeout(() => {
+        console.error('🔄 Dashboard: Loading timeout after 15 seconds')
+        setError('Dashboard loading timeout. Please try again.')
+        setIsLoading(false)
+      }, 15000) // 15 second timeout
+      
+      // Force clear cache to ensure fresh auth check
+      await SaveService.clearCache()
+      
+      // Get dashboard data - stats from DashboardService, real work items from SaveService
+      console.log('🔄🔄🔄 Dashboard: About to call SaveService for real work items')
+      console.log('🔄🔄🔄 Dashboard: Passing user to SaveService:', user?.email || 'guest')
+      const [dashboardStats, workItems] = await Promise.all([
+        DashboardService.getDashboardStats(), // Keep mock stats for now
+        SaveService.getSavedPostsAsWorkItems(user) // Pass user directly to avoid auth timeout
+      ])
+      
+      // For testing: If no saved posts exist, create mock posts
+      if (workItems.length === 0 && typeof window !== 'undefined') {
+        console.log('🎭 Dashboard: No saved posts found, creating mock posts for testing')
+        SaveService.createMockSavedPosts()
+        // Reload the work items after creating mock posts
+        const mockWorkItems = await SaveService.getSavedPostsAsWorkItems(user)
+        setWorkItems(mockWorkItems)
+        console.log('🎭 Dashboard: Mock posts created, loaded', mockWorkItems.length, 'items')
+      } else {
+        setWorkItems(workItems)
+      }
+      
+      console.log('📊📊📊 Dashboard: Loaded dashboard stats:', dashboardStats)
+      console.log('📊📊📊 Dashboard: Final work items count:', workItems.length)
+      
+      setStats(dashboardStats)
+      
+      // Clear loading timeout on successful load
+      clearTimeout(timeoutId)
+      
+      setIsLoading(false)
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      
+      // Set specific error message based on error type
+      if (errorMessage.includes('auth') || errorMessage.includes('user') || errorMessage.includes('session')) {
+        setError('Authentication error. Please sign in again.')
+      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        setError('Network error. Please check your connection and try again.')
+      } else {
+        setError('Failed to load dashboard. Please refresh the page.')
+      }
+      
+      // Clear loading timeout on error
+      clearTimeout(timeoutId)
+      
+      setIsLoading(false)
+    }
+  }
+
+  // Load saved posts on component mount - simple approach
   useEffect(() => {
-    console.log('🏠🏠🏠 DASHBOARD: useEffect triggered - about to call loadSavedPosts')
-    loadSavedPosts()
-  }, [])
+    console.log('🏠🏠🏠 DASHBOARD: Component mounted, calling loadSavedPosts')
+    const runLoad = async () => {
+      try {
+        console.log('🔄🔄🔄 Dashboard: Starting simple load')
+        setIsLoading(true)
+        setError(null)
+        
+        // Create mock posts for testing
+        SaveService.createMockSavedPosts()
+        await SaveService.clearCache()
+        
+        // Get data
+        const [dashboardStats, workItems] = await Promise.all([
+          DashboardService.getDashboardStats(),
+          SaveService.getSavedPostsAsWorkItems(user)
+        ])
+        
+        setStats(dashboardStats)
+        setWorkItems(workItems)
+        console.log('🔄🔄🔄 Dashboard: Load complete, items:', workItems.length)
+        setIsLoading(false)
+      } catch (error) {
+        console.error('Dashboard load error:', error)
+        setError('Failed to load dashboard')
+        setIsLoading(false)
+      }
+    }
+    runLoad()
+  }, []) // Only run once on mount
 
   // Refresh data when page becomes visible (user returns from wizard)
   useEffect(() => {
@@ -79,46 +173,6 @@ export default function DashboardPage() {
     }
   }, [])
 
-  const loadSavedPosts = async () => {
-    try {
-      console.log('🔄🔄🔄 Dashboard: Starting loadSavedPosts function')
-      setIsLoading(true)
-      
-      // Force clear cache to ensure fresh auth check
-      await SaveService.clearCache()
-      
-      // Get dashboard data - stats from DashboardService, real work items from SaveService
-      console.log('🔄🔄🔄 Dashboard: About to call SaveService for real work items')
-      console.log('🔄🔄🔄 Dashboard: Passing user to SaveService:', user?.email || 'guest')
-      const [dashboardStats, workItems] = await Promise.all([
-        DashboardService.getDashboardStats(), // Keep mock stats for now
-        SaveService.getSavedPostsAsWorkItems(user) // Pass user directly to avoid auth timeout
-      ])
-      
-      // For testing: If no saved posts exist, create mock posts
-      if (workItems.length === 0 && typeof window !== 'undefined') {
-        console.log('🎭 Dashboard: No saved posts found, creating mock posts for testing')
-        SaveService.createMockSavedPosts()
-        // Reload the work items after creating mock posts
-        const mockWorkItems = await SaveService.getSavedPostsAsWorkItems(user)
-        setWorkItems(mockWorkItems)
-        console.log('🎭 Dashboard: Mock posts created, loaded', mockWorkItems.length, 'items')
-      } else {
-        setWorkItems(workItems)
-      }
-      
-      console.log('📊📊📊 Dashboard: Loaded dashboard stats:', dashboardStats)
-      console.log('📊📊📊 Dashboard: Final work items count:', workItems.length)
-      
-      setStats(dashboardStats)
-      
-      setIsLoading(false)
-    } catch (error) {
-      console.error('Error loading dashboard data:', error)
-      setIsLoading(false)
-    }
-  }
-
   const hasWorkItems = workItems.length > 0
 
   // Helper function to navigate back to wizard with saved settings
@@ -148,6 +202,28 @@ export default function DashboardPage() {
           <h1 className="text-4xl font-bold text-gray-900 mb-1">Your dashboard</h1>
           <p className="text-gray-500 text-base">Track your content progress and access your tools • henninghammertorp@gmail.com</p>
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <div className="text-red-500 text-xl mr-3">⚠️</div>
+              <div>
+                <h3 className="text-red-800 font-semibold mb-1">Dashboard Loading Error</h3>
+                <p className="text-red-700 mb-3">{error}</p>
+                <button
+                  onClick={() => {
+                    setError(null)
+                    loadSavedPosts()
+                  }}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
+                >
+                  Try Again
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Metrics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -254,7 +330,18 @@ export default function DashboardPage() {
         </div>
 
         {/* Work Section */}
-        {hasWorkItems ? (
+        {isLoading ? (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">Your work</h2>
+              <p className="text-sm text-gray-500">Loading your drafts...</p>
+            </div>
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+              <span className="ml-4 text-gray-500">Loading your content...</span>
+            </div>
+          </div>
+        ) : hasWorkItems ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             {/* Table Header */}
             <div className="px-6 py-4 border-b border-gray-200">

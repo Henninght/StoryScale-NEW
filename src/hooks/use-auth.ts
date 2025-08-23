@@ -25,6 +25,83 @@ export function useAuth() {
   })
   const [isHydrated, setIsHydrated] = useState(false)
 
+  // Try to recover auth state from localStorage/sessionStorage
+  const tryAuthRecovery = async (): Promise<User | null> => {
+    try {
+      if (typeof window === 'undefined') return null
+      
+      console.log('🔐 useAuth: Attempting auth recovery from storage...')
+      
+      // Check sessionStorage first (most recent session)
+      const sessionAuth = sessionStorage.getItem('sb-auth-token')
+      if (sessionAuth) {
+        console.log('🔐 useAuth: Found session auth, attempting recovery...')
+        try {
+          const sessionData = JSON.parse(sessionAuth)
+          if (sessionData.expires_at && Date.now() < sessionData.expires_at * 1000) {
+            const user = await AuthService.getCurrentUser()
+            if (user) {
+              console.log('🔐 useAuth: Auth recovery successful from sessionStorage')
+              return user
+            }
+          }
+        } catch (error) {
+          console.log('🔐 useAuth: Session auth recovery failed:', error)
+        }
+      }
+      
+      // Fallback to localStorage
+      const localAuth = localStorage.getItem('sb-auth-token')
+      if (localAuth) {
+        console.log('🔐 useAuth: Found local auth, attempting recovery...')
+        try {
+          const localData = JSON.parse(localAuth)
+          if (localData.expires_at && Date.now() < localData.expires_at * 1000) {
+            const user = await AuthService.getCurrentUser()
+            if (user) {
+              console.log('🔐 useAuth: Auth recovery successful from localStorage')
+              return user
+            }
+          }
+        } catch (error) {
+          console.log('🔐 useAuth: Local auth recovery failed:', error)
+        }
+      }
+      
+      console.log('🔐 useAuth: No valid auth recovery found')
+      return null
+    } catch (error) {
+      console.error('🔐 useAuth: Auth recovery error:', error)
+      return null
+    }
+  }
+
+  // Retry auth with exponential backoff
+  const retryAuth = async (maxRetries = 3, baseDelay = 1000): Promise<User | null> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔐 useAuth: Auth attempt ${attempt}/${maxRetries}`)
+        const user = await AuthService.getCurrentUser()
+        if (user) {
+          console.log('🔐 useAuth: Auth retry successful')
+          return user
+        }
+        return null // No user found, don't retry
+      } catch (error) {
+        console.error(`🔐 useAuth: Auth attempt ${attempt} failed:`, error)
+        if (attempt === maxRetries) {
+          console.error('🔐 useAuth: All auth retries exhausted')
+          return null
+        }
+        // Exponential backoff: wait 1s, 2s, 4s...
+        const delay = baseDelay * Math.pow(2, attempt - 1)
+        console.log(`🔐 useAuth: Retrying in ${delay}ms...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+    return null
+  }
+
   useEffect(() => {
     // Initial auth check
     setIsHydrated(true)
@@ -74,16 +151,22 @@ export function useAuth() {
         }
       }
       
-      // Add timeout to prevent hanging on auth check
-      const userPromise = AuthService.getCurrentUser()
-      const timeoutPromise = new Promise<null>((resolve) => 
-        setTimeout(() => {
-          console.log('🔐 useAuth: Auth check timeout, assuming no user')
-          resolve(null)
-        }, 2000) // 2 second timeout
-      )
+      // Try auth recovery from localStorage first
+      let user = await tryAuthRecovery()
       
-      const user = await Promise.race([userPromise, timeoutPromise])
+      if (!user) {
+        // Add timeout to prevent hanging on auth check (increased for production)  
+        const userPromise = retryAuth()
+        const timeoutPromise = new Promise<null>((resolve) => 
+          setTimeout(() => {
+            console.log('🔐 useAuth: Auth check timeout, assuming no user')
+            resolve(null)
+          }, 8000) // 8 second timeout to allow for retries
+        )
+        
+        user = await Promise.race([userPromise, timeoutPromise])
+      }
+      
       console.log('🔐 useAuth: Got user:', user?.email || 'none')
       
       if (user) {
