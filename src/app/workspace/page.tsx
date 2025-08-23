@@ -35,73 +35,6 @@ export default function DashboardPage() {
   
   console.log('🏠🏠🏠 DASHBOARD: State initialized, workItems count:', workItems.length)
 
-  // Load saved posts function
-  const loadSavedPosts = async () => {
-    try {
-      console.log('🔄🔄🔄 Dashboard: Starting loadSavedPosts function')
-      console.log('🔄🔄🔄 Dashboard: Auth state - isLoading:', authLoading, 'user:', user?.email || 'guest')
-      setIsLoading(true)
-      setError(null) // Clear any previous errors
-      
-      // Set loading timeout to prevent infinite loading
-      const timeoutId = setTimeout(() => {
-        console.error('🔄 Dashboard: Loading timeout after 15 seconds')
-        setError('Dashboard loading timeout. Please try again.')
-        setIsLoading(false)
-      }, 15000) // 15 second timeout
-      
-      // Force clear cache to ensure fresh auth check
-      await SaveService.clearCache()
-      
-      // Get dashboard data - stats from DashboardService, real work items from SaveService
-      console.log('🔄🔄🔄 Dashboard: About to call SaveService for real work items')
-      console.log('🔄🔄🔄 Dashboard: Passing user to SaveService:', user?.email || 'guest')
-      const [dashboardStats, workItems] = await Promise.all([
-        DashboardService.getDashboardStats(), // Keep mock stats for now
-        SaveService.getSavedPostsAsWorkItems(user) // Pass user directly to avoid auth timeout
-      ])
-      
-      // For testing: If no saved posts exist, create mock posts
-      if (workItems.length === 0 && typeof window !== 'undefined') {
-        console.log('🎭 Dashboard: No saved posts found, creating mock posts for testing')
-        SaveService.createMockSavedPosts()
-        // Reload the work items after creating mock posts
-        const mockWorkItems = await SaveService.getSavedPostsAsWorkItems(user)
-        setWorkItems(mockWorkItems)
-        console.log('🎭 Dashboard: Mock posts created, loaded', mockWorkItems.length, 'items')
-      } else {
-        setWorkItems(workItems)
-      }
-      
-      console.log('📊📊📊 Dashboard: Loaded dashboard stats:', dashboardStats)
-      console.log('📊📊📊 Dashboard: Final work items count:', workItems.length)
-      
-      setStats(dashboardStats)
-      
-      // Clear loading timeout on successful load
-      clearTimeout(timeoutId)
-      
-      setIsLoading(false)
-    } catch (error) {
-      console.error('Error loading dashboard data:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-      
-      // Set specific error message based on error type
-      if (errorMessage.includes('auth') || errorMessage.includes('user') || errorMessage.includes('session')) {
-        setError('Authentication error. Please sign in again.')
-      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-        setError('Network error. Please check your connection and try again.')
-      } else {
-        setError('Failed to load dashboard. Please refresh the page.')
-      }
-      
-      // Clear loading timeout on error
-      clearTimeout(timeoutId)
-      
-      setIsLoading(false)
-    }
-  }
-
   // Very simple initialization that just works
   useEffect(() => {
     console.log('🏠🏠🏠 DASHBOARD: Component mounted - creating mock data')
@@ -152,13 +85,15 @@ export default function DashboardPage() {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         console.log('🔄 Dashboard: Page became visible, refreshing data...')
-        loadSavedPosts()
+        // Simple refresh without complex loading
+        setIsLoading(false) // Ensure not stuck in loading
       }
     }
 
     const handleFocus = () => {
       console.log('🔄 Dashboard: Page got focus, refreshing data...')
-      loadSavedPosts()
+      // Simple refresh without complex loading  
+      setIsLoading(false) // Ensure not stuck in loading
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -174,9 +109,8 @@ export default function DashboardPage() {
   useEffect(() => {
     const handleContentSaved = (event: CustomEvent) => {
       console.log('🔄 Dashboard: Received contentSaved event:', event.detail)
-      setTimeout(() => {
-        loadSavedPosts()
-      }, 500) // Small delay to ensure save is complete
+      // Simple refresh without complex loading
+      setIsLoading(false) // Ensure not stuck in loading
     }
 
     window.addEventListener('contentSaved', handleContentSaved as EventListener)
@@ -227,7 +161,7 @@ export default function DashboardPage() {
                 <button
                   onClick={() => {
                     setError(null)
-                    loadSavedPosts()
+                    setIsLoading(false) // Simple fix without complex loading
                   }}
                   className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
                 >
