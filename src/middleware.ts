@@ -37,6 +37,7 @@ export async function middleware(request: NextRequest) {
           '/api/test-research', 
           '/api/test-anthropic', 
           '/api/test-db-connection', 
+          '/api/test-auth-timeout',
           '/api/generate', // Allow generate endpoint for guest users
           '/api/architecture',
           '/api/debug-session',  // Debug endpoints for troubleshooting

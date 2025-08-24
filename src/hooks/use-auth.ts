@@ -107,9 +107,27 @@ export function useAuth() {
     setIsHydrated(true)
     initializeAuth()
 
+    // Fallback timeout to ensure loading state doesn't persist indefinitely
+    const fallbackTimeout = setTimeout(() => {
+      console.log('🔐 useAuth: Fallback timeout triggered, forcing loading to false')
+      setState(prev => {
+        if (prev.isLoading) {
+          return {
+            ...prev,
+            isLoading: false,
+            isAuthenticated: false,
+            user: null,
+            profile: null
+          }
+        }
+        return prev
+      })
+    }, 10000) // 10 second fallback
+
     // Subscribe to auth changes
     const { data: { subscription } } = AuthService.onAuthStateChange(
       async (event, session) => {
+        clearTimeout(fallbackTimeout) // Clear fallback since auth resolved
         if (event === 'SIGNED_IN' && session?.user) {
           await handleSignIn(session.user)
         } else if (event === 'SIGNED_OUT') {
@@ -119,6 +137,7 @@ export function useAuth() {
     )
 
     return () => {
+      clearTimeout(fallbackTimeout)
       subscription.unsubscribe()
     }
   }, [])
@@ -126,6 +145,12 @@ export function useAuth() {
   const initializeAuth = async () => {
     try {
       console.log('🔐 useAuth: Initializing auth...')
+      
+      // Always clear loading state after initializeAuth completes
+      const clearLoadingTimeout = setTimeout(() => {
+        console.log('🔐 useAuth: Clearing loading state after init timeout')
+        setState(prev => ({ ...prev, isLoading: false }))
+      }, 5000) // Clear loading after 5 seconds max
       
       // Check if we have OAuth tokens in URL (e.g., from OAuth callback)
       if (typeof window !== 'undefined' && window.location.hash) {
@@ -155,13 +180,13 @@ export function useAuth() {
       let user = await tryAuthRecovery()
       
       if (!user) {
-        // Add timeout to prevent hanging on auth check (increased for production)  
-        const userPromise = retryAuth()
+        // Add timeout to prevent hanging on auth check
+        const userPromise = retryAuth(2, 500) // Reduce retries and delay
         const timeoutPromise = new Promise<null>((resolve) => 
           setTimeout(() => {
             console.log('🔐 useAuth: Auth check timeout, assuming no user')
             resolve(null)
-          }, 8000) // 8 second timeout to allow for retries
+          }, 3000) // Reduce timeout to 3 seconds
         )
         
         user = await Promise.race([userPromise, timeoutPromise])
@@ -207,6 +232,9 @@ export function useAuth() {
         isLoading: false,
         isAuthenticated: false
       })
+    } finally {
+      // Clear the timeout since initialization completed (success or failure)
+      clearTimeout(clearLoadingTimeout)
     }
   }
 
